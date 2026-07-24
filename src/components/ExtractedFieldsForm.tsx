@@ -1,0 +1,205 @@
+'use client';
+
+import React, { useState, useEffect } from 'react';
+import { User, Building, ShieldAlert, Award, Phone, Mail, Check } from 'lucide-react';
+
+interface ExtractedFields {
+  name: string | null;
+  company: string | null;
+  title: string | null;
+  email: string | null;
+  phone: string | null;
+  confidence: number;
+}
+
+interface ExtractedFieldsFormProps {
+  initialFields: ExtractedFields;
+  onConfirm: (fields: ExtractedFields) => void;
+  onCancel: () => void;
+}
+
+export default function ExtractedFieldsForm({
+  initialFields,
+  onConfirm,
+  onCancel,
+}: ExtractedFieldsFormProps) {
+  const [fields, setFields] = useState<ExtractedFields>({ ...initialFields });
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useEffect(() => {
+    setFields({ ...initialFields });
+  }, [initialFields]);
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    setFields((prev) => ({
+      ...prev,
+      [name]: value === '' ? null : value,
+    }));
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+    // Simulate minor transition animation delay
+    setTimeout(() => {
+      onConfirm(fields);
+      setIsSubmitting(false);
+    }, 400);
+  };
+
+  // Determine confidence status styling
+  const getConfidenceBadge = (score: number) => {
+    if (score >= 0.8) {
+      return (
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+          <Award className="w-3.5 h-3.5" />
+          High Confidence ({Math.round(score * 100)}%)
+        </span>
+      );
+    } else if (score >= 0.5) {
+      return (
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20">
+          <ShieldAlert className="w-3.5 h-3.5" />
+          Moderate Confidence ({Math.round(score * 100)}%)
+        </span>
+      );
+    } else {
+      return (
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-red-500/10 text-red-400 border border-red-500/20">
+          <ShieldAlert className="w-3.5 h-3.5" />
+          Needs Review ({Math.round(score * 100)}%)
+        </span>
+      );
+    }
+  };
+
+  return (
+    <div className="glass-panel p-6 rounded-2xl w-full max-w-md mx-auto transition-all duration-300">
+      <div className="flex flex-col gap-1.5 mb-6">
+        <div className="flex items-center justify-between">
+          <h3 className="text-lg font-semibold text-zinc-100">Confirm Lead Details</h3>
+          {getConfidenceBadge(fields.confidence)}
+        </div>
+        <p className="text-xs text-zinc-400">
+          Review the contact details extracted from the business card and make any necessary corrections.
+        </p>
+      </div>
+
+      <form onSubmit={handleSubmit} className="space-y-4">
+        {/* Full Name */}
+        <div className="space-y-1.5">
+          <label htmlFor="name" className="text-xs font-medium text-zinc-400 flex items-center gap-1.5">
+            <User className="w-3.5 h-3.5 text-indigo-400" />
+            Full Name
+          </label>
+          <input
+            type="text"
+            id="name"
+            name="name"
+            value={fields.name || ''}
+            onChange={handleChange}
+            placeholder="John Doe"
+            required
+            className="w-full bg-black/50 border border-white/5 focus:border-indigo-500/50 focus:ring-1 focus:ring-indigo-500/20 rounded-xl px-4 py-3 text-sm text-zinc-100 placeholder-zinc-600 transition-all outline-none shadow-inner"
+          />
+        </div>
+
+        {/* Company Name */}
+        <div className="space-y-1.5">
+          <label htmlFor="company" className="text-xs font-medium text-zinc-400 flex items-center gap-1.5">
+            <Building className="w-3.5 h-3.5 text-indigo-400" />
+            Company Name
+          </label>
+          <input
+            type="text"
+            id="company"
+            name="company"
+            value={fields.company || ''}
+            onChange={handleChange}
+            placeholder="Acme Corporation"
+            className="w-full bg-black/50 border border-white/5 focus:border-indigo-500/50 focus:ring-1 focus:ring-indigo-500/20 rounded-xl px-4 py-3 text-sm text-zinc-100 placeholder-zinc-600 transition-all outline-none shadow-inner"
+          />
+        </div>
+
+        {/* Job Title */}
+        <div className="space-y-1.5">
+          <label htmlFor="title" className="text-xs font-medium text-zinc-400 flex items-center gap-1.5">
+            <Award className="w-3.5 h-3.5 text-indigo-400" />
+            Job Title
+          </label>
+          <input
+            type="text"
+            id="title"
+            name="title"
+            value={fields.title || ''}
+            onChange={handleChange}
+            placeholder="Managing Director"
+            className="w-full bg-black/50 border border-white/5 focus:border-indigo-500/50 focus:ring-1 focus:ring-indigo-500/20 rounded-xl px-4 py-3 text-sm text-zinc-100 placeholder-zinc-600 transition-all outline-none shadow-inner"
+          />
+        </div>
+
+        {/* Email Address */}
+        <div className="space-y-1.5">
+          <label htmlFor="email" className="text-xs font-medium text-zinc-400 flex items-center gap-1.5">
+            <Mail className="w-3.5 h-3.5 text-indigo-400" />
+            Email Address
+          </label>
+          <input
+            type="email"
+            id="email"
+            name="email"
+            value={fields.email || ''}
+            onChange={handleChange}
+            placeholder="john@example.com"
+            required
+            className="w-full bg-black/50 border border-white/5 focus:border-indigo-500/50 focus:ring-1 focus:ring-indigo-500/20 rounded-xl px-4 py-3 text-sm text-zinc-100 placeholder-zinc-600 transition-all outline-none shadow-inner"
+          />
+        </div>
+
+        {/* Phone Number */}
+        <div className="space-y-1.5">
+          <label htmlFor="phone" className="text-xs font-medium text-zinc-400 flex items-center gap-1.5">
+            <Phone className="w-3.5 h-3.5 text-indigo-400" />
+            Phone Number
+          </label>
+          <input
+            type="tel"
+            id="phone"
+            name="phone"
+            value={fields.phone || ''}
+            onChange={handleChange}
+            placeholder="+1 555-0199"
+            className="w-full bg-black/50 border border-white/5 focus:border-indigo-500/50 focus:ring-1 focus:ring-indigo-500/20 rounded-xl px-4 py-3 text-sm text-zinc-100 placeholder-zinc-600 transition-all outline-none shadow-inner"
+          />
+        </div>
+
+        {/* Actions */}
+        <div className="flex items-center gap-3 pt-4">
+          <button
+            type="button"
+            onClick={onCancel}
+            disabled={isSubmitting}
+            className="flex-1 py-2.5 px-4 rounded-xl border border-zinc-800 text-sm font-medium text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900 transition-all"
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            disabled={isSubmitting}
+            className="flex-1 py-2.5 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-sm font-medium text-white flex items-center justify-center gap-1.5 neon-glow-primary hover:scale-[1.01] transition-all"
+          >
+            {isSubmitting ? (
+              <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+            ) : (
+              <>
+                <Check className="w-4 h-4" />
+                Confirm Details
+              </>
+            )}
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}

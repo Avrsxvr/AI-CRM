@@ -1,0 +1,66 @@
+import { GoogleGenerativeAI } from '@google/generative-ai';
+import { z } from 'zod';
+import { CARD_OCR_SYSTEM_PROMPT } from '@/lib/prompts/cardOcr.prompt';
+
+// Define the precise schema for the expected OCR output
+export const CardOcrOutputSchema = z.object({
+  name: z.string().nullable().describe('The full name of the person'),
+  company: z.string().nullable().describe('The organization or company name'),
+  title: z.string().nullable().describe('The job title or designation'),
+  email: z.string().email().nullable().describe('The email address'),
+  phone: z.string().nullable().describe('The primary contact phone number'),
+  confidence_score: z.number().min(0).max(100).describe('Estimated confidence in extraction accuracy (0-100)'),
+});
+
+export type CardOcrOutput = z.infer<typeof CardOcrOutputSchema>;
+
+export class CardOcrAgent {
+  /**
+   * Processes a base64 business card image and returns structured contact fields.
+   * Uses Google Generative AI SDK directly for native image support.
+   */
+  public static async processCard(imageBase64: string, mimeType: string): Promise<CardOcrOutput> {
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+      throw new Error('Gemini API key (GEMINI_API_KEY) is missing in environment variables.');
+    }
+
+    const genAI = new GoogleGenerativeAI(apiKey);
+    const model = genAI.getGenerativeModel({
+      model: 'gemini-flash-latest',
+      systemInstruction: CARD_OCR_SYSTEM_PROMPT,
+      generationConfig: {
+        temperature: 0,
+        responseMimeType: 'application/json',
+      },
+    });
+
+    const imagePart = {
+      inlineData: {
+        data: imageBase64,
+        mimeType: mimeType,
+      },
+    };
+
+    const prompt = `Extract the contact details from this business card image and return ONLY valid JSON with these exact keys: name, company, title, email, phone, confidence_score. Use null for any field that is not visible on the card. confidence_score should be a number from 0 to 100.`;
+
+    try {
+      const result = await model.generateContent([prompt, imagePart]);
+      const text = result.response.text();
+      // Strip markdown code fences if present
+      const cleaned = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+      const parsed = JSON.parse(cleaned);
+      return parsed as CardOcrOutput;
+    } catch (error) {
+      console.error('Error in Card OCR Agent (Gemini):', error);
+      return {
+        name: null,
+        company: null,
+        title: null,
+        email: null,
+        phone: null,
+        confidence_score: 0.0,
+      };
+    }
+  }
+}
