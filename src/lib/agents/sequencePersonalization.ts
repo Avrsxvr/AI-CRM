@@ -1,4 +1,4 @@
-import { GoogleGenerativeAI, Schema, Type } from '@google/generative-ai';
+import { GoogleGenerativeAI, Schema, SchemaType } from '@google/generative-ai';
 import { SEQUENCE_PERSONALIZATION_SYSTEM_PROMPT, DRIP_TEMPLATES } from '@/lib/prompts/sequencePersonalization.prompt';
 
 export interface SequencePersonalizationOutput {
@@ -28,14 +28,14 @@ export class SequencePersonalizationAgent {
     const genAI = new GoogleGenerativeAI(apiKey);
 
     const responseSchema: Schema = {
-      type: Type.OBJECT,
+      type: SchemaType.OBJECT,
       properties: {
         subject: {
-          type: Type.STRING,
+          type: SchemaType.STRING,
           description: "The personalized email subject line",
         },
         body: {
-          type: Type.STRING,
+          type: SchemaType.STRING,
           description: "The full email body text, appropriately formatted",
         },
       },

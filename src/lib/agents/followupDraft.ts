@@ -1,4 +1,4 @@
-import { GoogleGenerativeAI, Schema, Type } from '@google/generative-ai';
+import { GoogleGenerativeAI, Schema, SchemaType } from '@google/generative-ai';
 import { FOLLOWUP_DRAFT_SYSTEM_PROMPT } from '@/lib/prompts/followupDraft.prompt';
 
 export interface FollowupDraftOutput {
@@ -23,14 +23,14 @@ export class FollowupDraftAgent {
     const genAI = new GoogleGenerativeAI(apiKey);
 
     const responseSchema: Schema = {
-      type: Type.OBJECT,
+      type: SchemaType.OBJECT,
       properties: {
         subject: {
-          type: Type.STRING,
+          type: SchemaType.STRING,
           description: "The email subject line, catchy and personalized",
         },
         body: {
-          type: Type.STRING,
+          type: SchemaType.STRING,
           description: "The full email body text, formatted with appropriate line breaks",
         },
       },
