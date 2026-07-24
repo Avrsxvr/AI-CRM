@@ -76,25 +76,25 @@ export default function LeadsDashboard() {
               <Sparkles className="w-5 h-5 text-indigo-400" />
             </div>
             <div>
-              <span className="font-bold text-white tracking-wide block leading-none mb-1">AI CRM Hub</span>
-              <span className="text-[10px] text-zinc-500 font-mono tracking-widest uppercase">Exhibition Edition</span>
+              <span className="font-bold text-white tracking-wide block leading-none mb-1 text-sm sm:text-base">AI CRM Hub</span>
+              <span className="text-[10px] text-zinc-500 font-mono tracking-widest uppercase hidden sm:block">Exhibition Edition</span>
             </div>
           </div>
 
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2 sm:gap-4">
             <button
               onClick={fetchLeads}
-              className="p-2.5 rounded-xl border border-white/10 hover:bg-white/5 text-zinc-400 hover:text-white transition-all group"
+              className="p-2 sm:p-2.5 rounded-xl border border-white/10 hover:bg-white/5 text-zinc-400 hover:text-white transition-all group"
               title="Refresh Data"
             >
-              <RefreshCw className={`w-4 h-4 group-hover:text-indigo-400 transition-colors ${isLoading ? 'animate-spin text-indigo-400' : ''}`} />
+              <RefreshCw className={`w-3.5 h-3.5 sm:w-4 sm:h-4 group-hover:text-indigo-400 transition-colors ${isLoading ? 'animate-spin text-indigo-400' : ''}`} />
             </button>
             <Link
               href="/capture"
-              className="py-2.5 px-5 rounded-xl bg-white hover:bg-zinc-200 font-bold text-sm text-black flex items-center gap-2 shadow-lg shadow-white/10 hover:scale-[1.02] transition-all"
+              className="py-2 px-3 sm:py-2.5 sm:px-5 rounded-xl bg-white hover:bg-zinc-200 font-bold text-xs sm:text-sm text-black flex items-center gap-1.5 sm:gap-2 shadow-lg shadow-white/10 hover:scale-[1.02] transition-all"
             >
-              <UserPlus className="w-4 h-4" />
-              Capture Lead
+              <UserPlus className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+              <span>Capture<span className="hidden sm:inline"> Lead</span></span>
             </Link>
           </div>
         </div>
@@ -114,12 +114,12 @@ export default function LeadsDashboard() {
           </div>
           
           {/* Status Tabs */}
-          <div className="flex gap-1.5 bg-white/5 p-1.5 rounded-2xl border border-white/5 w-fit h-fit backdrop-blur-md">
+          <div className="flex gap-1 bg-white/5 p-1 rounded-xl border border-white/5 overflow-x-auto max-w-full backdrop-blur-md whitespace-nowrap scrollbar-none">
             {['all', 'synced', 'needs_attention', 'capturing'].map((tab) => (
               <button
                 key={tab}
                 onClick={() => setStatusFilter(tab)}
-                className={`px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-all ${
+                className={`px-2.5 py-1.5 sm:px-4 sm:py-2 rounded-lg sm:rounded-xl text-[10px] sm:text-xs font-bold uppercase tracking-wider transition-all flex-shrink-0 ${
                   statusFilter === tab
                     ? 'bg-white text-black shadow-md'
                     : 'text-zinc-500 hover:text-zinc-300 hover:bg-white/5'
@@ -132,34 +132,40 @@ export default function LeadsDashboard() {
         </div>
 
         {/* Metrics Banner */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="glass-panel p-6 rounded-3xl flex items-center gap-5 border border-indigo-500/10 bg-indigo-950/10 group hover:border-indigo-500/30 transition-colors">
-            <div className="w-14 h-14 rounded-2xl bg-indigo-500/20 text-indigo-400 flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform neon-glow-primary">
-              <Users className="w-6 h-6" />
+        <div className="grid grid-cols-3 gap-2 md:gap-6">
+          <div className="glass-panel p-3 md:p-6 rounded-2xl md:rounded-3xl flex flex-col md:flex-row items-center gap-2 md:gap-5 border border-indigo-500/10 bg-indigo-950/10 group hover:border-indigo-500/30 transition-all">
+            <div className="w-10 h-10 md:w-14 md:h-14 rounded-xl md:rounded-2xl bg-indigo-500/20 text-indigo-400 flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform neon-glow-primary">
+              <Users className="w-5 h-5 md:w-6 md:h-6" />
             </div>
-            <div className="space-y-1">
-              <span className="text-xs text-indigo-300 font-bold uppercase tracking-widest opacity-80">Total Leads</span>
-              <p className="text-3xl font-black text-white">{totalLeads}</p>
-            </div>
-          </div>
-
-          <div className="glass-panel p-6 rounded-3xl flex items-center gap-5 border border-teal-500/10 bg-teal-950/10 group hover:border-teal-500/30 transition-colors">
-            <div className="w-14 h-14 rounded-2xl bg-teal-500/20 text-teal-400 flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform neon-glow-secondary">
-              <CheckCircle className="w-6 h-6" />
-            </div>
-            <div className="space-y-1">
-              <span className="text-xs text-teal-300 font-bold uppercase tracking-widest opacity-80">CRM Synced</span>
-              <p className="text-3xl font-black text-white">{syncedCount}</p>
+            <div className="space-y-0.5 md:space-y-1 text-center md:text-left">
+              <span className="text-[9px] md:text-xs text-indigo-300 font-bold uppercase tracking-widest opacity-80 block">
+                Total<span className="hidden sm:inline"> Leads</span>
+              </span>
+              <p className="text-lg md:text-3xl font-black text-white leading-none">{totalLeads}</p>
             </div>
           </div>
 
-          <div className="glass-panel p-6 rounded-3xl flex items-center gap-5 border border-red-500/10 bg-red-950/10 group hover:border-red-500/30 transition-colors">
-            <div className="w-14 h-14 rounded-2xl bg-red-500/20 text-red-400 flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform neon-glow-accent">
-              <AlertTriangle className="w-6 h-6" />
+          <div className="glass-panel p-3 md:p-6 rounded-2xl md:rounded-3xl flex flex-col md:flex-row items-center gap-2 md:gap-5 border border-teal-500/10 bg-teal-950/10 group hover:border-teal-500/30 transition-all">
+            <div className="w-10 h-10 md:w-14 md:h-14 rounded-xl md:rounded-2xl bg-teal-500/20 text-teal-400 flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform neon-glow-secondary">
+              <CheckCircle className="w-5 h-5 md:w-6 md:h-6" />
             </div>
-            <div className="space-y-1">
-              <span className="text-xs text-red-300 font-bold uppercase tracking-widest opacity-80">Failed / Alert</span>
-              <p className="text-3xl font-black text-white">{alertCount}</p>
+            <div className="space-y-0.5 md:space-y-1 text-center md:text-left">
+              <span className="text-[9px] md:text-xs text-teal-300 font-bold uppercase tracking-widest opacity-80 block">
+                Synced<span className="hidden sm:inline"> CRM</span>
+              </span>
+              <p className="text-lg md:text-3xl font-black text-white leading-none">{syncedCount}</p>
+            </div>
+          </div>
+
+          <div className="glass-panel p-3 md:p-6 rounded-2xl md:rounded-3xl flex flex-col md:flex-row items-center gap-2 md:gap-5 border border-red-500/10 bg-red-950/10 group hover:border-red-500/30 transition-all">
+            <div className="w-10 h-10 md:w-14 md:h-14 rounded-xl md:rounded-2xl bg-red-500/20 text-red-400 flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform neon-glow-accent">
+              <AlertTriangle className="w-5 h-5 md:w-6 md:h-6" />
+            </div>
+            <div className="space-y-0.5 md:space-y-1 text-center md:text-left">
+              <span className="text-[9px] md:text-xs text-red-300 font-bold uppercase tracking-widest opacity-80 block">
+                Alerts
+              </span>
+              <p className="text-lg md:text-3xl font-black text-white leading-none">{alertCount}</p>
             </div>
           </div>
         </div>
