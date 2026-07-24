@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   X,
   User,
@@ -15,6 +15,9 @@ import {
   AlertCircle,
   Clock,
   CheckCircle,
+  Camera,
+  Save,
+  Edit3,
 } from 'lucide-react';
 import LeadStatusBadge from './LeadStatusBadge';
 
@@ -34,6 +37,129 @@ export default function LeadDetailPanel({ lead, onClose, onRefresh }: LeadDetail
   const card = lead.card_scans?.[0] || {};
   const followups = lead.followups || [];
   const syncLogs = lead.crm_sync_log || [];
+
+  // Edit State
+  const [isEditing, setIsEditing] = useState(false);
+  const [editName, setEditName] = useState(contact.name || '');
+  const [editCompany, setEditCompany] = useState(contact.company || '');
+  const [editTitle, setEditTitle] = useState(contact.title || '');
+  const [editEmail, setEditEmail] = useState(contact.email || '');
+  const [editPhone, setEditPhone] = useState(contact.phone || '');
+  const [isSavingFields, setIsSavingFields] = useState(false);
+
+  // Scanning State
+  const [isScanningCard, setIsScanningCard] = useState(false);
+  const [scanError, setScanError] = useState<string | null>(null);
+
+  // Reset fields when lead changes
+  useEffect(() => {
+    setEditName(lead.contact_fields?.name || '');
+    setEditCompany(lead.contact_fields?.company || '');
+    setEditTitle(lead.contact_fields?.title || '');
+    setEditEmail(lead.contact_fields?.email || '');
+    setEditPhone(lead.contact_fields?.phone || '');
+    setIsEditing(false);
+    setScanError(null);
+  }, [lead.id, lead.contact_fields]);
+
+  const handleSaveFields = async () => {
+    setIsSavingFields(true);
+    setError(null);
+    try {
+      const response = await fetch(`/api/leads/${lead.id}/save`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contactFields: {
+            name: editName || null,
+            company: editCompany || null,
+            title: editTitle || null,
+            email: editEmail || null,
+            phone: editPhone || null,
+          }
+        }),
+      });
+      if (!response.ok) {
+        const result = await response.json();
+        throw new Error(result.error?.message || 'Failed to save changes.');
+      }
+      setIsEditing(false);
+      onRefresh();
+    } catch (err: any) {
+      setError(err.message || 'An error occurred.');
+    } finally {
+      setIsSavingFields(false);
+    }
+  };
+
+  const handleCardUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsScanningCard(true);
+    setScanError(null);
+
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const img = new Image();
+      img.onload = async () => {
+        // Compress using Canvas to prevent payload size limits
+        const canvas = document.createElement('canvas');
+        const MAX_WIDTH = 1200;
+        const MAX_HEIGHT = 1200;
+        let width = img.width;
+        let height = img.height;
+
+        if (width > height) {
+          if (width > MAX_WIDTH) {
+            height *= MAX_WIDTH / width;
+            width = MAX_WIDTH;
+          }
+        } else {
+          if (height > MAX_HEIGHT) {
+            width *= MAX_HEIGHT / height;
+            height = MAX_HEIGHT;
+          }
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, width, height);
+          const compressedBase64 = canvas.toDataURL('image/jpeg', 0.8);
+          
+          try {
+            const response = await fetch('/api/leads/card-scan', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ image: compressedBase64 }),
+            });
+            const result = await response.json();
+            
+            if (response.ok && result.data) {
+              const data = result.data;
+              // Switch to editing and auto-fill extracted details
+              setIsEditing(true);
+              if (data.name) setEditName(data.name);
+              if (data.company) setEditCompany(data.company);
+              if (data.title) setEditTitle(data.title);
+              if (data.email) setEditEmail(data.email);
+              if (data.phone) setEditPhone(data.phone);
+            } else {
+              setScanError(result.error?.message || 'Failed to scan card.');
+            }
+          } catch (err) {
+            setScanError('Failed to upload or scan card image.');
+          } finally {
+            setIsScanningCard(false);
+          }
+        }
+      };
+      img.src = reader.result as string;
+    };
+    reader.readAsDataURL(file);
+  };
 
   const handleRetrySync = async () => {
     setIsRetrying(true);
@@ -143,34 +269,147 @@ export default function LeadDetailPanel({ lead, onClose, onRefresh }: LeadDetail
 
         {/* 1. Contact Details Card */}
         <div className="glass-panel p-5 rounded-2xl space-y-4 border border-white/5">
-          <h4 className="text-xs font-bold text-zinc-500 uppercase tracking-widest flex items-center gap-2 border-b border-white/5 pb-3">
-            <User className="w-4 h-4 text-indigo-400" />
-            Contact Profile
-          </h4>
-          <div className="grid grid-cols-1 gap-2.5 text-xs">
-            <div className="flex items-center gap-2">
-              <Building className="w-4 h-4 text-zinc-500" />
-              <span className="text-zinc-300">Company:</span>
-              <span className="text-zinc-100 font-medium">{contact.company || 'Unknown'}</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <Sparkles className="w-4 h-4 text-zinc-500" />
-              <span className="text-zinc-300">Job Title:</span>
-              <span className="text-zinc-100 font-medium">{contact.title || 'Not Specified'}</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <Mail className="w-4 h-4 text-zinc-500" />
-              <span className="text-zinc-300">Email:</span>
-              <a href={`mailto:${contact.email}`} className="text-indigo-400 hover:underline">
-                {contact.email || 'None'}
-              </a>
-            </div>
-            <div className="flex items-center gap-2">
-              <Phone className="w-4 h-4 text-zinc-500" />
-              <span className="text-zinc-300">Phone:</span>
-              <span className="text-zinc-100">{contact.phone || 'None'}</span>
-            </div>
+          <div className="flex items-center justify-between border-b border-white/5 pb-3">
+            <h4 className="text-xs font-bold text-zinc-500 uppercase tracking-widest flex items-center gap-2">
+              <User className="w-4 h-4 text-indigo-400" />
+              Contact Profile
+            </h4>
+            {!isEditing && (
+              <button
+                onClick={() => setIsEditing(true)}
+                className="p-1 rounded hover:bg-white/5 text-zinc-500 hover:text-white transition-colors"
+                title="Edit Profile"
+              >
+                <Edit3 className="w-4 h-4" />
+              </button>
+            )}
           </div>
+          
+          {isEditing ? (
+            <div className="space-y-3">
+              <div className="space-y-1">
+                <label className="text-[10px] uppercase font-bold text-zinc-500">Name</label>
+                <input
+                  type="text"
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
+                  className="w-full bg-zinc-950/80 border border-zinc-800 rounded-xl px-3.5 py-2 text-xs text-white placeholder-zinc-700 focus:border-indigo-500 focus:ring-0 outline-none"
+                  placeholder="e.g. John Doe"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] uppercase font-bold text-zinc-500">Company</label>
+                <input
+                  type="text"
+                  value={editCompany}
+                  onChange={(e) => setEditCompany(e.target.value)}
+                  className="w-full bg-zinc-950/80 border border-zinc-800 rounded-xl px-3.5 py-2 text-xs text-white placeholder-zinc-700 focus:border-indigo-500 focus:ring-0 outline-none"
+                  placeholder="e.g. Acme Corp"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] uppercase font-bold text-zinc-500">Job Title</label>
+                <input
+                  type="text"
+                  value={editTitle}
+                  onChange={(e) => setEditTitle(e.target.value)}
+                  className="w-full bg-zinc-950/80 border border-zinc-800 rounded-xl px-3.5 py-2 text-xs text-white placeholder-zinc-700 focus:border-indigo-500 focus:ring-0 outline-none"
+                  placeholder="e.g. Manager"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] uppercase font-bold text-zinc-500">Email</label>
+                <input
+                  type="email"
+                  value={editEmail}
+                  onChange={(e) => setEditEmail(e.target.value)}
+                  className="w-full bg-zinc-950/80 border border-zinc-800 rounded-xl px-3.5 py-2 text-xs text-white placeholder-zinc-700 focus:border-indigo-500 focus:ring-0 outline-none"
+                  placeholder="e.g. name@company.com"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] uppercase font-bold text-zinc-500">Phone</label>
+                <input
+                  type="text"
+                  value={editPhone}
+                  onChange={(e) => setEditPhone(e.target.value)}
+                  className="w-full bg-zinc-950/80 border border-zinc-800 rounded-xl px-3.5 py-2 text-xs text-white placeholder-zinc-700 focus:border-indigo-500 focus:ring-0 outline-none"
+                  placeholder="e.g. +1 555-0199"
+                />
+              </div>
+              <div className="flex gap-2 pt-2">
+                <button
+                  onClick={handleSaveFields}
+                  disabled={isSavingFields}
+                  className="flex-1 py-2 px-3 rounded-xl bg-white text-black hover:bg-zinc-200 text-xs font-bold transition-all flex items-center justify-center gap-1.5"
+                >
+                  {isSavingFields ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                  Save Changes
+                </button>
+                <button
+                  onClick={() => setIsEditing(false)}
+                  className="py-2 px-4 rounded-xl bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-white text-xs font-semibold transition-all"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 gap-2.5 text-xs">
+                <div className="flex items-center gap-2">
+                  <Building className="w-4 h-4 text-zinc-500" />
+                  <span className="text-zinc-300">Company:</span>
+                  <span className="text-zinc-100 font-medium">{contact.company || 'Unknown'}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Sparkles className="w-4 h-4 text-zinc-500" />
+                  <span className="text-zinc-300">Job Title:</span>
+                  <span className="text-zinc-100 font-medium">{contact.title || 'Not Specified'}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Mail className="w-4 h-4 text-zinc-500" />
+                  <span className="text-zinc-300">Email:</span>
+                  {contact.email ? (
+                    <a href={`mailto:${contact.email}`} className="text-indigo-400 hover:underline">
+                      {contact.email}
+                    </a>
+                  ) : (
+                    <span className="text-zinc-500 italic">None</span>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  <Phone className="w-4 h-4 text-zinc-500" />
+                  <span className="text-zinc-300">Phone:</span>
+                  <span className={contact.phone ? "text-zinc-100" : "text-zinc-500 italic"}>
+                    {contact.phone || 'None'}
+                  </span>
+                </div>
+              </div>
+
+              {!contact.name && (
+                <div className="border border-dashed border-zinc-800 rounded-2xl p-4 text-center space-y-3 bg-zinc-950/20">
+                  <p className="text-[11px] text-zinc-500 leading-relaxed">
+                    Missing prospect info? Upload a business card photo to automatically extract and populate their profile details.
+                  </p>
+                  <label className="inline-flex items-center justify-center gap-2 py-2 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold cursor-pointer transition-all neon-glow-primary">
+                    <Camera className="w-3.5 h-3.5" />
+                    {isScanningCard ? 'Processing...' : 'Upload Business Card'}
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleCardUpload}
+                      disabled={isScanningCard}
+                      className="hidden"
+                    />
+                  </label>
+                  {scanError && (
+                    <p className="text-[10px] text-red-400">{scanError}</p>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* 2. AI Extraction Insights */}
@@ -239,16 +478,27 @@ export default function LeadDetailPanel({ lead, onClose, onRefresh }: LeadDetail
           </div>
         )}
 
-        {/* 3. Audio Transcript */}
-        {recording && recording.transcript && (
-          <div className="glass-panel p-4 rounded-xl space-y-2">
+        {/* 3. Audio & Transcript */}
+        {recording && (recording.audio_url || recording.transcript) && (
+          <div className="glass-panel p-4 rounded-xl space-y-3">
             <h4 className="text-xs font-bold text-zinc-400 uppercase tracking-wider flex items-center gap-1.5 border-b border-zinc-800/40 pb-2">
               <MessageSquare className="w-4 h-4 text-indigo-400" />
-              Conversation Transcript
+              Recorded Conversation
             </h4>
-            <div className="max-h-40 overflow-y-auto bg-zinc-950/60 p-3 rounded-lg border border-zinc-900/60 text-xs text-zinc-400 font-mono leading-relaxed whitespace-pre-line">
-              {recording.transcript}
-            </div>
+            {recording.audio_url && !recording.audio_url.startsWith('local-placeholder://') && (
+              <div className="pb-1">
+                <audio 
+                  src={recording.audio_url} 
+                  controls 
+                  className="w-full h-8 rounded-full bg-zinc-950 border border-zinc-900" 
+                />
+              </div>
+            )}
+            {recording.transcript && (
+              <div className="max-h-40 overflow-y-auto bg-zinc-950/60 p-3 rounded-lg border border-zinc-900/60 text-xs text-zinc-400 font-mono leading-relaxed whitespace-pre-line">
+                {recording.transcript}
+              </div>
+            )}
           </div>
         )}
 
