@@ -103,15 +103,15 @@ export async function POST(req: NextRequest) {
           })
           .eq('id', leadId);
         
-        // Save recording details
+        // Save recording details (use upsert on conflict to prevent unique key violations)
         await supabaseAdmin
           .from('recordings')
-          .insert({
+          .upsert({
             lead_id: leadId,
             audio_url: audioUrl,
             transcript: transcript,
             status: 'completed',
-          });
+          }, { onConflict: 'lead_id' });
         
         leadRecord = { id: leadId };
       } else if (organizationId) {

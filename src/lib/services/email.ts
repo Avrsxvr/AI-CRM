@@ -17,10 +17,27 @@ export class EmailService {
   /**
    * Sends an email using the Resend SDK, or mocks the output to the console if unconfigured.
    */
-  public static async sendEmail(to: string, subject: string, body: string): Promise<string> {
+  public static async sendEmail(
+    to: string, 
+    subject: string, 
+    body: string, 
+    leadId?: string, 
+    touchPosition?: number,
+    appUrl?: string
+  ): Promise<string> {
     const resend = this.getClient();
     const fromAddress = process.env.EMAIL_FROM_ADDRESS || 'leads@yourdomain.com';
     const fromName = process.env.EMAIL_FROM_NAME || 'Sales Team';
+
+    // Format plain text breaks to HTML breaks
+    let htmlBody = body.replace(/\n/g, '<br />');
+
+    // Append 1x1 transparent tracking pixel if leadId is provided
+    if (leadId) {
+      const finalAppUrl = appUrl || process.env.NEXT_PUBLIC_APP_URL || 'https://amma.vercel.app';
+      const trackingUrl = `${finalAppUrl}/api/leads/${leadId}/track-open${touchPosition ? `?touch=${touchPosition}` : ''}`;
+      htmlBody += `<br /><br /><img src="${trackingUrl}" width="1" height="1" style="display:none;" alt="" />`;
+    }
 
     if (!resend) {
       // Mock sending by logging to output console
@@ -30,8 +47,10 @@ export class EmailService {
 To: ${to}
 From: "${fromName}" <${fromAddress}>
 Subject: ${subject}
+Tracking Enabled: ${!!leadId} (Touch: ${touchPosition || 'Immediate'})
 --------------------------------------------------
-${body}
+HTML Body:
+${htmlBody}
 ==================================================
       `);
       return `mock-email-id-${Date.now()}`;
@@ -45,7 +64,7 @@ ${body}
         from: `"${fromName}" <${fromAddress}>`,
         to: finalTo,
         subject: subject,
-        text: body, // plain text email body
+        html: htmlBody,
       });
 
       if (response.error) {

@@ -112,8 +112,13 @@ ${emailBody}
 
       // Queue the follow-up sequences (1-hour follow-up + bi-weekly drip)
       try {
+        // Generate base app URL dynamically from request headers for seamless localhost/Vercel tracking
+        const host = req.headers.get('host') || 'localhost:3000';
+        const protocol = host.includes('localhost') ? 'http' : 'https';
+        const dynamicAppUrl = `${protocol}://${host}`;
+
         // Send the first email immediately instead of waiting for the cron job
-        await EmailService.sendEmail('avrsmain@gmail.com', subject, emailBody);
+        await EmailService.sendEmail(contactFields.email || 'avrsmain@gmail.com', subject, emailBody, id, 1, dynamicAppUrl);
         
         // Queue the remaining bi-weekly drip sequence starting at touch 2
         await SchedulerAgent.scheduleSequence(id, { subject, body: emailBody });

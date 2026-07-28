@@ -104,12 +104,12 @@ export class LeadsRepository {
   ) {
     const { data, error } = await supabaseAdmin
       .from('card_scans')
-      .insert({
+      .upsert({
         lead_id: leadId,
         image_url: imageUrl,
         extracted_fields: extractedFields,
         confidence,
-      })
+      }, { onConflict: 'lead_id' })
       .select()
       .single();
 

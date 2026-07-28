@@ -20,7 +20,8 @@ export default function CardScanner({ onScanComplete, isProcessing: externalProc
   const [image, setImage] = useState<string | null>(null);
   const [isScanning, setIsScanning] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+  const uploadInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setError(null);
@@ -76,8 +77,12 @@ export default function CardScanner({ onScanComplete, isProcessing: externalProc
     reader.readAsDataURL(file);
   };
 
-  const triggerFileInput = () => {
-    fileInputRef.current?.click();
+  const triggerCameraInput = () => {
+    cameraInputRef.current?.click();
+  };
+
+  const triggerUploadInput = () => {
+    uploadInputRef.current?.click();
   };
 
   const handleScan = async () => {
@@ -106,7 +111,12 @@ export default function CardScanner({ onScanComplete, isProcessing: externalProc
       }
 
       onScanComplete({
-        ...result.data,
+        name: result.data.name,
+        company: result.data.company,
+        title: result.data.title,
+        email: result.data.email,
+        phone: result.data.phone,
+        confidence: typeof result.data.confidence_score === 'number' ? result.data.confidence_score : 100,
         image,
       });
       // Optionally clear image here if we want it to reset after success
@@ -138,31 +148,46 @@ export default function CardScanner({ onScanComplete, isProcessing: externalProc
     <div className="w-full flex flex-col items-center">
       <input
         type="file"
-        ref={fileInputRef}
+        ref={cameraInputRef}
         onChange={handleFileChange}
         accept="image/*"
         capture="environment"
         className="hidden"
       />
+      <input
+        type="file"
+        ref={uploadInputRef}
+        onChange={handleFileChange}
+        accept="image/*"
+        className="hidden"
+      />
 
       {!image ? (
-        <button
-          onClick={triggerFileInput}
-          className="relative flex flex-col items-center justify-center w-full py-8 px-4 h-[184px] rounded-3xl bg-zinc-900 border-2 border-zinc-800 hover:border-zinc-700 hover:bg-zinc-800/80 transition-all duration-300 group overflow-hidden"
-        >
-          <div className="flex items-center justify-center w-16 h-16 rounded-full bg-zinc-800 border border-zinc-700 mb-3 group-hover:scale-105 transition-transform duration-300">
-            <Camera className="w-7 h-7 text-zinc-400 group-hover:text-zinc-300" />
-          </div>
-          
-          <div className="flex flex-col items-center">
-            <span className="text-lg font-bold tracking-wide text-zinc-100 group-hover:text-white">
-              SCAN BUSINESS CARD
+        <div className="w-full flex gap-3 h-[184px]">
+          <button
+            onClick={triggerCameraInput}
+            className="flex-1 relative flex flex-col items-center justify-center p-4 rounded-3xl bg-zinc-900 border-2 border-zinc-800 hover:border-zinc-700 hover:bg-zinc-800/80 transition-all duration-300 group overflow-hidden"
+          >
+            <div className="flex items-center justify-center w-14 h-14 rounded-full bg-zinc-800 border border-zinc-700 mb-3 group-hover:scale-105 transition-transform duration-300">
+              <Camera className="w-6 h-6 text-zinc-400 group-hover:text-zinc-300" />
+            </div>
+            <span className="text-sm font-bold tracking-wide text-zinc-100 group-hover:text-white text-center">
+              TAKE PHOTO
             </span>
-            <span className="text-sm text-zinc-500 font-medium mt-1">
-              Tap to take photo or upload
+          </button>
+
+          <button
+            onClick={triggerUploadInput}
+            className="flex-1 relative flex flex-col items-center justify-center p-4 rounded-3xl bg-zinc-900 border-2 border-zinc-800 hover:border-zinc-700 hover:bg-zinc-800/80 transition-all duration-300 group overflow-hidden"
+          >
+            <div className="flex items-center justify-center w-14 h-14 rounded-full bg-zinc-800 border border-zinc-700 mb-3 group-hover:scale-105 transition-transform duration-300">
+              <ImageIcon className="w-6 h-6 text-zinc-400 group-hover:text-zinc-300" />
+            </div>
+            <span className="text-sm font-bold tracking-wide text-zinc-100 group-hover:text-white text-center">
+              UPLOAD FILE
             </span>
-          </div>
-        </button>
+          </button>
+        </div>
       ) : (
         <div className="w-full rounded-3xl overflow-hidden border border-zinc-800 bg-zinc-950/80 p-2 shadow-2xl relative group">
           <div className="relative rounded-2xl overflow-hidden aspect-[1.5/1] bg-black flex items-center justify-center">

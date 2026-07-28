@@ -153,4 +153,69 @@ export class ZohoService {
 
     throw new Error('Failed to create Zoho CRM lead after 3 retries.');
   }
+
+  /**
+   * Updates fields of an existing lead in Zoho CRM.
+   */
+  public static async updateLead(crmRecordId: string, fields: any): Promise<boolean> {
+    try {
+      const accessToken = await this.refreshAccessToken();
+      const apiUrl = `${this.getApiUrl()}/crm/v2/Leads/${crmRecordId}`;
+
+      const response = await fetch(apiUrl, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Zoho-oauthtoken ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ data: [fields] }),
+      });
+
+      if (!response.ok) {
+        const errText = await response.text();
+        console.warn('Failed to update Zoho CRM lead:', errText);
+        return false;
+      }
+      return true;
+    } catch (error) {
+      console.warn('Error updating Zoho CRM lead:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Adds a Note timeline entry under a Lead in Zoho CRM.
+   */
+  public static async addNote(crmRecordId: string, title: string, content: string): Promise<boolean> {
+    try {
+      const accessToken = await this.refreshAccessToken();
+      const apiUrl = `${this.getApiUrl()}/crm/v2/Notes`;
+
+      const noteData = {
+        Note_Title: title,
+        Note_Content: content,
+        Parent_Id: crmRecordId,
+        $se_module: 'Leads',
+      };
+
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Zoho-oauthtoken ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ data: [noteData] }),
+      });
+
+      if (!response.ok) {
+        const errText = await response.text();
+        console.warn('Failed to add note in Zoho CRM:', errText);
+        return false;
+      }
+      return true;
+    } catch (error) {
+      console.warn('Error adding note in Zoho CRM:', error);
+      return false;
+    }
+  }
 }

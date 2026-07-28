@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { MailOpen, Edit, Save, Send, AlertTriangle, CheckCircle } from 'lucide-react';
 
 interface EmailDraft {
@@ -27,6 +27,14 @@ export default function FollowupDraftEditor({
   const [syncStatus, setSyncStatus] = useState<{ status: 'idle' | 'success' | 'failed'; system?: 'zoho' | 'sheets' }>({
     status: 'idle',
   });
+
+  useEffect(() => {
+    const originalStyle = window.getComputedStyle(document.body).overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = originalStyle || '';
+    };
+  }, []);
 
   const handleInputChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>

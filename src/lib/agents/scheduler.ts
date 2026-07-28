@@ -12,15 +12,16 @@ export class SchedulerAgent {
     const followups = [];
     const now = Date.now();
 
-    // 1. First follow-up: 1 hour from now
+    // 1. First follow-up: Sent immediately if firstTouch is provided, otherwise queued
     followups.push({
       lead_id: leadId,
       sequence_position: 1,
       channel: 'email',
-      status: 'queued',
+      status: firstTouch ? 'sent' : 'queued',
+      sent_at: firstTouch ? new Date(now).toISOString() : null,
       subject: firstTouch?.subject || null,
       body: firstTouch?.body || null,
-      scheduled_for: new Date(now + 60 * 60 * 1000).toISOString(), // 1 hour
+      scheduled_for: new Date(now + (firstTouch ? 0 : 60 * 60 * 1000)).toISOString(), // 1 hour if queued, now if sent immediately
     });
 
     // 2. Drip sequence: 5 bi-weekly touches (e.g. Days 14, 28, 42, 56, 70)

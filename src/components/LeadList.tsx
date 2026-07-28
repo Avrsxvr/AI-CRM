@@ -58,11 +58,27 @@ export default function LeadList({ leads, onSelectLead }: LeadListProps) {
                   <td className="py-3.5 px-4">
                     <div className="font-semibold text-zinc-100 flex items-center gap-1.5">
                       <User className="w-3.5 h-3.5 text-indigo-400" />
-                      {contact.name || 'Unnamed Lead'}
+                      <span>{contact.name || 'Unnamed Lead'}</span>
+                      {lead.context_summary?.is_hot && (
+                        <span className="px-1.5 py-0.5 rounded text-[9px] font-extrabold uppercase bg-rose-500/20 text-rose-400 border border-rose-500/30 shadow-[0_0_10px_rgba(244,63,94,0.1)] select-none animate-pulse">
+                          🔥 Hot
+                        </span>
+                      )}
                     </div>
-                    {contact.email && (
-                      <span className="text-[10px] text-zinc-500 block mt-0.5">{contact.email}</span>
-                    )}
+                    <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                      {contact.email && (
+                        <span className="text-[10px] text-zinc-500">{contact.email}</span>
+                      )}
+                      {lead.followups?.length > 0 && (
+                        <>
+                          {contact.email && <span className="text-[10px] text-zinc-700 select-none">•</span>}
+                          <span className="text-[9px] font-semibold text-zinc-400 bg-zinc-950/60 border border-zinc-850 px-1.5 py-0.5 rounded flex items-center gap-1 select-none">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                            👁️ {lead.context_summary?.open_count || 0} views
+                          </span>
+                        </>
+                      )}
+                    </div>
                   </td>
                   <td className="py-3.5 px-4 text-zinc-300 font-medium">{contact.company || 'Unknown'}</td>
                   <td className="py-3.5 px-4 text-zinc-400">{contact.title || 'Not Specified'}</td>
@@ -101,10 +117,21 @@ export default function LeadList({ leads, onSelectLead }: LeadListProps) {
                 <div className="space-y-0.5">
                   <h4 className="font-bold text-zinc-100 flex items-center gap-1.5 text-sm">
                     <User className="w-4 h-4 text-indigo-400" />
-                    {contact.name || 'Unnamed Lead'}
+                    <span>{contact.name || 'Unnamed Lead'}</span>
+                    {lead.context_summary?.is_hot && (
+                      <span className="px-1.5 py-0.5 rounded text-[9px] font-extrabold uppercase bg-rose-500/20 text-rose-400 border border-rose-500/30 shadow-[0_0_10px_rgba(244,63,94,0.1)] select-none animate-pulse">
+                        🔥 Hot
+                      </span>
+                    )}
                   </h4>
                   {contact.title && (
                     <p className="text-xs text-zinc-400">{contact.title}</p>
+                  )}
+                  {lead.followups?.length > 0 && (
+                    <span className="text-[9px] font-semibold text-zinc-400 bg-zinc-950/60 border border-zinc-850 px-1.5 py-0.5 rounded flex items-center gap-1 select-none w-max mt-1.5">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                      👁️ {lead.context_summary?.open_count || 0} views
+                    </span>
                   )}
                 </div>
                 <LeadStatusBadge status={lead.status} />

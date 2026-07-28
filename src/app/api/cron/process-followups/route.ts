@@ -3,6 +3,7 @@ import { supabaseAdmin } from '@/lib/supabase';
 import { EmailService } from '@/lib/services/email';
 import { SequencePersonalizationAgent } from '@/lib/agents/sequencePersonalization';
 import { FollowupDraftAgent } from '@/lib/agents/followupDraft';
+import { ZohoService } from '@/lib/services/zoho';
 
 export async function GET(req: NextRequest) {
   // Enforce CRON security check (check header or secret key to prevent unauthorized GET trigger)
@@ -117,8 +118,13 @@ export async function GET(req: NextRequest) {
           body = personalizedTouch.body;
         }
 
+        // Generate base app URL dynamically from request headers for seamless localhost/Vercel tracking
+        const host = req.headers.get('host') || 'localhost:3000';
+        const protocol = host.includes('localhost') ? 'http' : 'https';
+        const dynamicAppUrl = `${protocol}://${host}`;
+
         // 4. Send Email
-        await EmailService.sendEmail(email, subject, body);
+        await EmailService.sendEmail(email, subject, body, followup.lead_id, followup.sequence_position, dynamicAppUrl);
 
         // 5. Update followup to 'sent' and log actual content sent
         await supabaseAdmin
@@ -130,6 +136,28 @@ export async function GET(req: NextRequest) {
             body,
           })
           .eq('id', followup.id);
+
+        // 6. Update Zoho CRM Lead Status & Add Note (if synced to Zoho)
+        if (lead.crm_record_id && !lead.crm_record_id.startsWith('sheets:')) {
+          try {
+            const currentProblem = lead.context_summary?.problem || 'Not specified';
+            const currentNeeds = lead.context_summary?.needs || 'Not specified';
+            const baseDescription = `Prospect captured from Trade Show recording. Problem: ${currentProblem}. Needs: ${currentNeeds}`;
+            
+            await ZohoService.updateLead(lead.crm_record_id, {
+              Lead_Status: 'Attempted to Contact',
+              Description: `${baseDescription}\n\n[System Log] Touch ${followup.sequence_position} follow-up email sent on ${new Date().toLocaleString()}.`
+            });
+
+            await ZohoService.addNote(
+              lead.crm_record_id,
+              `Follow-up Touch ${followup.sequence_position} Sent`,
+              `Subject: ${subject}\n\nSent at: ${new Date().toLocaleString()}\n\nBody:\n${body}`
+            );
+          } catch (zohoErr) {
+            console.error('Failed to sync email dispatch note/status to Zoho CRM:', zohoErr);
+          }
+        }
 
         successes++;
       } catch (fError: any) {

@@ -8,6 +8,7 @@ import FollowupDraftEditor from '@/components/FollowupDraftEditor';
 import { Sparkles, CheckCircle2, ChevronRight, User, ShieldCheck, Play, Save, AlertCircle } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { OfflineStorage } from '@/lib/services/offline';
 
 interface ExtractedContact {
   name: string | null;
@@ -16,6 +17,7 @@ interface ExtractedContact {
   email: string | null;
   phone: string | null;
   confidence: number;
+  image?: string;
 }
 
 export default function CaptureDashboard() {
@@ -34,6 +36,10 @@ export default function CaptureDashboard() {
   const [context, setContext] = useState<any>(null);
   const [extractedFields, setExtractedFields] = useState<ExtractedContact | null>(null);
   const [emailDraft, setEmailDraft] = useState<{ subject: string; body: string } | null>(null);
+  
+  // Offline caching states
+  const [offlineAudioBase64, setOfflineAudioBase64] = useState<string | null>(null);
+  const [audioBlobType, setAudioBlobType] = useState<string | null>(null);
   
   const [syncSystem, setSyncSystem] = useState<'zoho' | 'sheets' | null>(null);
   const [isComplete, setIsComplete] = useState(false);
@@ -67,6 +73,33 @@ export default function CaptureDashboard() {
   const handleRecordingComplete = async (audioBlob: Blob) => {
     setAudioProcessing(true);
     setAudioUrl(URL.createObjectURL(audioBlob));
+    setAudioBlobType(audioBlob.type);
+    
+    // If offline, cache recording locally as base64 data-URI
+    if (typeof window !== 'undefined' && !navigator.onLine) {
+      try {
+        const base64 = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(reader.result as string);
+          reader.onerror = reject;
+          reader.readAsDataURL(audioBlob);
+        });
+        setOfflineAudioBase64(base64);
+        setTranscript('[Audio conversation recorded offline - Cloud sync pending for AI analysis]');
+        setContext({
+          problem: 'Pending sync',
+          needs: 'Pending sync',
+          action_items: ['Sync to cloud when online'],
+          sentiment: 'neutral'
+        });
+      } catch (err) {
+        console.error('Failed to convert offline audio to base64:', err);
+      } finally {
+        setAudioProcessing(false);
+      }
+      return;
+    }
+
     const activeLeadId = await ensureLeadId();
     
     const formData = new FormData();
@@ -96,6 +129,12 @@ export default function CaptureDashboard() {
   };
 
   const handleScanComplete = async (data: any) => {
+    // If offline, bypass ensureLeadId since we can't initialize it in the DB yet
+    if (typeof window !== 'undefined' && !navigator.onLine) {
+      setExtractedFields(data);
+      setShowFieldsModal(true);
+      return;
+    }
     const activeLeadId = await ensureLeadId();
     // In a real app we'd map this ID to the card scan record if they happen sequentially.
     setExtractedFields(data);
@@ -136,6 +175,34 @@ export default function CaptureDashboard() {
   };
 
   const handleSaveDraft = async () => {
+    // If offline, save lead structure to local offline queue and redirect
+    if (typeof window !== 'undefined' && !navigator.onLine && extractedFields) {
+      setIsSaving(true);
+      setSaveError(null);
+      try {
+        OfflineStorage.enqueue({
+          contactFields: {
+            name: extractedFields.name,
+            company: extractedFields.company,
+            title: extractedFields.title,
+            email: extractedFields.email,
+            phone: extractedFields.phone,
+          },
+          audioBase64: offlineAudioBase64,
+          audioMimeType: audioBlobType,
+          cardImageBase64: extractedFields.image || null,
+        });
+        
+        router.push('/leads');
+      } catch (err) {
+        console.error('Failed to save lead offline:', err);
+        setSaveError('Failed to cache lead locally. Browser storage might be full.');
+      } finally {
+        setIsSaving(false);
+      }
+      return;
+    }
+
     if (leadId && extractedFields) {
       setIsSaving(true);
       setSaveError(null);
@@ -143,7 +210,13 @@ export default function CaptureDashboard() {
         const res = await fetch(`/api/leads/${leadId}/save`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ contactFields: extractedFields }),
+          body: JSON.stringify({ 
+            contactFields: extractedFields,
+            cardImage: extractedFields.image || null,
+            confidence: typeof extractedFields.confidence === 'number' 
+              ? (extractedFields.confidence / 100) 
+              : 1.0
+          }),
         });
         if (!res.ok) throw new Error('Failed to save to database');
         
@@ -227,15 +300,6 @@ export default function CaptureDashboard() {
             <div className="flex flex-col gap-6">
               <RecordButton onRecordingComplete={handleRecordingComplete} isProcessing={audioProcessing} />
               
-              {audioUrl && (
-                <div className="glass-panel p-5 rounded-3xl animate-in fade-in slide-in-from-bottom-4 duration-500 border border-indigo-500/20 bg-indigo-950/10">
-                  <h4 className="text-xs font-bold text-indigo-400 uppercase tracking-widest mb-3 flex items-center gap-2">
-                    <Play className="w-4 h-4" /> Audio Playback
-                  </h4>
-                  <audio src={audioUrl} controls className="w-full h-10 rounded-full" />
-                </div>
-              )}
-
               {context && (
                 <div className="glass-panel p-6 rounded-3xl flex-1 animate-in fade-in slide-in-from-bottom-4 duration-500 border border-indigo-500/20 bg-indigo-950/10">
                   <h4 className="text-xs font-bold text-indigo-400 uppercase tracking-widest mb-4 flex items-center gap-2">

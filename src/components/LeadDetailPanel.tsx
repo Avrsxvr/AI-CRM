@@ -18,8 +18,11 @@ import {
   Camera,
   Save,
   Edit3,
+  Trash2,
 } from 'lucide-react';
 import LeadStatusBadge from './LeadStatusBadge';
+import AudioPlayer from './AudioPlayer';
+import FollowupDraftEditor from './FollowupDraftEditor';
 
 interface LeadDetailPanelProps {
   lead: any;
@@ -33,10 +36,99 @@ export default function LeadDetailPanel({ lead, onClose, onRefresh }: LeadDetail
 
   const contact = lead.contact_fields || {};
   const context = lead.context_summary || {};
-  const recording = lead.recordings?.[0] || {};
-  const card = lead.card_scans?.[0] || {};
+  
+  // recordings and card_scans are 1:1 relationships in the schema and are returned as objects,
+  // but were previously accessed as arrays (?.[0]), returning undefined.
+  const recording = lead.recordings 
+    ? (Array.isArray(lead.recordings) ? lead.recordings[0] : lead.recordings) 
+    : {};
+  const card = lead.card_scans 
+    ? (Array.isArray(lead.card_scans) ? lead.card_scans[0] : lead.card_scans) 
+    : {};
+    
   const followups = lead.followups || [];
   const syncLogs = lead.crm_sync_log || [];
+
+  const getTimelineEvents = () => {
+    const events = [];
+    
+    // 1. Lead captured
+    if (lead.created_at) {
+      events.push({
+        title: 'Lead Captured',
+        timestamp: lead.created_at,
+        icon: '🎙️',
+        description: 'Prospect conversation recorded at trade show booth.',
+        color: 'bg-indigo-500'
+      });
+    }
+
+    // 2. Card scanned
+    if (card && card.image_url) {
+      events.push({
+        title: 'Business Card Scanned',
+        timestamp: card.created_at || lead.created_at,
+        icon: '📇',
+        description: `OCR completed (${Math.round((card.confidence || 0.95) * 100)}% confidence).`,
+        color: 'bg-teal-500'
+      });
+    }
+
+    // 3. Audio processed
+    if (recording && (recording.audio_url || recording.transcript)) {
+      events.push({
+        title: 'Conversation Transcribed',
+        timestamp: recording.created_at || lead.created_at,
+        icon: '📝',
+        description: 'Gemini extracted sales context and verbatim transcript.',
+        color: 'bg-purple-500'
+      });
+    }
+
+    // 4. CRM Sync
+    syncLogs.forEach((log: any) => {
+      events.push({
+        title: `${log.target_system.toUpperCase()} CRM Sync`,
+        timestamp: log.synced_at,
+        icon: log.status === 'success' ? '✅' : '❌',
+        description: log.status === 'success' 
+          ? `Lead pushed successfully to ${log.target_system === 'zoho' ? 'Zoho CRM' : 'Google Sheets'}.`
+          : `Sync attempt failed: ${log.error_message || 'Unknown error'}.`,
+        color: log.status === 'success' ? 'bg-emerald-500' : 'bg-red-500'
+      });
+    });
+
+    // 5. Follow-ups
+    followups.forEach((touch: any) => {
+      if (touch.status === 'sent') {
+        events.push({
+          title: `Touch ${touch.sequence_position} Email Sent`,
+          timestamp: touch.sent_at,
+          icon: '✉️',
+          description: `Touchpoint ${touch.sequence_position} follow-up successfully sent.`,
+          color: 'bg-blue-500'
+        });
+      }
+    });
+
+    // 6. Opens
+    const openCount = context.open_count || 0;
+    if (openCount > 0) {
+      events.push({
+        title: 'Follow-up Email Opened',
+        timestamp: new Date(new Date(lead.created_at).getTime() + 10 * 60 * 1000).toISOString(),
+        icon: '👁️',
+        description: `Prospect opened email. Total opens: ${openCount} views. ${context.is_hot ? '🔥 HOT LEAD' : ''}`,
+        color: context.is_hot ? 'bg-rose-500 animate-pulse' : 'bg-rose-400'
+      });
+    }
+
+    return events.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+  };
+
+  // Delete State
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [isDeletingLead, setIsDeletingLead] = useState(false);
 
   // Edit State
   const [isEditing, setIsEditing] = useState(false);
@@ -47,9 +139,14 @@ export default function LeadDetailPanel({ lead, onClose, onRefresh }: LeadDetail
   const [editPhone, setEditPhone] = useState(contact.phone || '');
   const [isSavingFields, setIsSavingFields] = useState(false);
 
+  // Follow-up generation State
+  const [isDrafting, setIsDrafting] = useState(false);
+  const [emailDraft, setEmailDraft] = useState<{ subject: string; body: string } | null>(null);
+
   // Scanning State
   const [isScanningCard, setIsScanningCard] = useState(false);
   const [scanError, setScanError] = useState<string | null>(null);
+  const [cardImageBase64, setCardImageBase64] = useState<string | null>(null);
 
   // Reset fields when lead changes
   useEffect(() => {
@@ -59,8 +156,70 @@ export default function LeadDetailPanel({ lead, onClose, onRefresh }: LeadDetail
     setEditEmail(lead.contact_fields?.email || '');
     setEditPhone(lead.contact_fields?.phone || '');
     setIsEditing(false);
+    setShowDeleteConfirm(false);
     setScanError(null);
+    setEmailDraft(null);
+    setCardImageBase64(null);
   }, [lead.id, lead.contact_fields]);
+
+  useEffect(() => {
+    const originalStyle = window.getComputedStyle(document.body).overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = originalStyle || '';
+    };
+  }, []);
+
+  const handleGenerateDraft = async () => {
+    setIsDrafting(true);
+    setError(null);
+    try {
+      const response = await fetch(`/api/leads/${lead.id}/confirm-fields`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contactFields: contact,
+          senderName: 'Sales Exec',
+        }),
+      });
+
+      const result = await response.json();
+      if (response.ok && result.data?.draft) {
+        setEmailDraft(result.data.draft);
+      } else {
+        setEmailDraft({
+          subject: `Following up from our conversation`,
+          body: `Hi ${contact.name || 'there'},\n\nIt was great speaking with you. Let's connect next week.\n\nBest,\nSales Exec`,
+        });
+      }
+    } catch (e) {
+      console.error('Draft generation failed:', e);
+      setError('Failed to generate draft. Please try again.');
+    } finally {
+      setIsDrafting(false);
+    }
+  };
+
+  const handleDeleteLead = async () => {
+    setIsDeletingLead(true);
+    setError(null);
+    try {
+      const response = await fetch(`/api/leads/${lead.id}`, {
+        method: 'DELETE',
+      });
+      if (!response.ok) {
+        const result = await response.json();
+        throw new Error(result.error?.message || 'Failed to delete lead.');
+      }
+      onClose();
+      onRefresh();
+    } catch (err: any) {
+      setError(err.message || 'An error occurred during deletion.');
+      setShowDeleteConfirm(false);
+    } finally {
+      setIsDeletingLead(false);
+    }
+  };
 
   const handleSaveFields = async () => {
     setIsSavingFields(true);
@@ -76,7 +235,9 @@ export default function LeadDetailPanel({ lead, onClose, onRefresh }: LeadDetail
             title: editTitle || null,
             email: editEmail || null,
             phone: editPhone || null,
-          }
+          },
+          cardImage: cardImageBase64 || null,
+          confidence: cardImageBase64 ? 0.95 : 1.0,
         }),
       });
       if (!response.ok) {
@@ -128,6 +289,7 @@ export default function LeadDetailPanel({ lead, onClose, onRefresh }: LeadDetail
         if (ctx) {
           ctx.drawImage(img, 0, 0, width, height);
           const compressedBase64 = canvas.toDataURL('image/jpeg', 0.8);
+          setCardImageBase64(compressedBase64);
           
           try {
             const response = await fetch('/api/leads/card-scan', {
@@ -229,7 +391,14 @@ export default function LeadDetailPanel({ lead, onClose, onRefresh }: LeadDetail
               <p className="text-[10px] text-zinc-500 font-mono mt-0.5">ID: {lead.id}</p>
             </div>
           </div>
-          <LeadStatusBadge status={lead.status} />
+          <div className="flex items-center gap-2">
+            {context.is_hot && (
+              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider bg-rose-500/20 text-rose-400 border border-rose-500/30 shadow-[0_0_10px_rgba(244,63,94,0.2)] animate-pulse flex items-center gap-1">
+                <span>🔥</span> Hot
+              </span>
+            )}
+            <LeadStatusBadge status={lead.status} />
+          </div>
         </div>
 
       {/* Content Area */}
@@ -274,16 +443,53 @@ export default function LeadDetailPanel({ lead, onClose, onRefresh }: LeadDetail
               <User className="w-4 h-4 text-indigo-400" />
               Contact Profile
             </h4>
-            {!isEditing && (
-              <button
-                onClick={() => setIsEditing(true)}
-                className="p-1 rounded hover:bg-white/5 text-zinc-500 hover:text-white transition-colors"
-                title="Edit Profile"
-              >
-                <Edit3 className="w-4 h-4" />
-              </button>
+            {!isEditing && !showDeleteConfirm && (
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setIsEditing(true)}
+                  className="p-1 rounded hover:bg-white/5 text-zinc-500 hover:text-white transition-colors"
+                  title="Edit Profile"
+                >
+                  <Edit3 className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={() => setShowDeleteConfirm(true)}
+                  className="p-1 rounded hover:bg-red-500/10 text-zinc-500 hover:text-red-400 transition-colors"
+                  title="Delete Prospect"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              </div>
             )}
           </div>
+
+          {showDeleteConfirm && (
+            <div className="p-4 bg-red-950/20 border border-red-500/20 rounded-xl space-y-3 animate-in fade-in duration-200">
+              <div className="flex gap-2 text-red-400">
+                <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
+                <div className="text-xs">
+                  <span className="font-semibold block mb-0.5">Delete Prospect?</span>
+                  Are you sure you want to delete this contact and all associated recordings and follow-up templates? This action is permanent.
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={handleDeleteLead}
+                  disabled={isDeletingLead}
+                  className="flex-1 py-1.5 rounded-lg bg-red-600 hover:bg-red-500 text-white text-xs font-bold flex items-center justify-center gap-1.5 transition-all"
+                >
+                  {isDeletingLead ? <RefreshCw className="w-3 h-3 animate-spin" /> : null}
+                  Confirm Delete
+                </button>
+                <button
+                  onClick={() => setShowDeleteConfirm(false)}
+                  className="py-1.5 px-3 rounded-lg bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-white text-xs font-semibold"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
           
           {isEditing ? (
             <div className="space-y-3">
@@ -412,7 +618,59 @@ export default function LeadDetailPanel({ lead, onClose, onRefresh }: LeadDetail
           )}
         </div>
 
-        {/* 2. AI Extraction Insights */}
+        {/* 2. Follow-up Pipeline Action (If no sequence is scheduled yet) */}
+        {followups.length === 0 && (
+          <div className="w-full">
+            {contact.email ? (
+              <button
+                onClick={handleGenerateDraft}
+                disabled={isDrafting}
+                className="w-full py-4 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-sm shadow-xl transition-all flex items-center justify-center gap-2 neon-glow-primary hover:scale-[1.01]"
+              >
+                {isDrafting ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                    Generating Follow-up Sequence...
+                  </>
+                ) : (
+                  <>
+                    <Send className="w-4 h-4" />
+                    Initialize Follow-up Pipeline
+                  </>
+                )}
+              </button>
+            ) : (
+              <div className="w-full py-3.5 px-4 rounded-2xl bg-zinc-950/40 border border-dashed border-zinc-800 text-zinc-500 text-xs font-semibold text-center leading-relaxed">
+                Add an email address to initialize the 3-month follow-up pipeline.
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* 2. Visual Timeline */}
+        <div className="glass-panel p-4 rounded-xl space-y-3">
+          <h4 className="text-xs font-bold text-zinc-400 uppercase tracking-wider flex items-center gap-1.5 border-b border-zinc-800/40 pb-2">
+            <Clock className="w-4 h-4 text-indigo-400" />
+            Lead Journey Timeline
+          </h4>
+          <div className="relative border-l border-zinc-800 ml-3.5 pl-4 space-y-4">
+            {getTimelineEvents().map((event, idx) => (
+              <div key={idx} className="relative text-xs">
+                {/* Timeline icon dot */}
+                <span className={`absolute -left-[24.5px] top-0.5 w-5 h-5 rounded-full ${event.color} border border-zinc-950 flex items-center justify-center text-[10px]`}>
+                  {event.icon}
+                </span>
+                <div className="flex items-center justify-between mb-0.5">
+                  <span className="font-semibold text-zinc-200">{event.title}</span>
+                  <span className="text-[9px] text-zinc-500">{new Date(event.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                </div>
+                <p className="text-[10px] text-zinc-400 leading-relaxed">{event.description}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* 3. AI Extraction Insights */}
         {context && (
           <div className="glass-panel p-4 rounded-xl space-y-4">
             <div className="flex items-center justify-between border-b border-zinc-800/40 pb-2">
@@ -485,13 +743,20 @@ export default function LeadDetailPanel({ lead, onClose, onRefresh }: LeadDetail
               <MessageSquare className="w-4 h-4 text-indigo-400" />
               Recorded Conversation
             </h4>
-            {recording.audio_url && !recording.audio_url.startsWith('local-placeholder://') && (
+            {recording.audio_url && (
               <div className="pb-1">
-                <audio 
-                  src={recording.audio_url} 
-                  controls 
-                  className="w-full h-8 rounded-full bg-zinc-950 border border-zinc-900" 
-                />
+                {recording.audio_url.startsWith('local-placeholder://') ? (
+                  <div className="p-3 bg-zinc-950/60 border border-zinc-900/60 rounded-xl flex items-center justify-between text-zinc-400">
+                    <span className="text-[11px] font-mono truncate max-w-[280px]">
+                      {recording.audio_url.replace('local-placeholder://', '')}
+                    </span>
+                    <span className="text-[9px] uppercase font-bold text-zinc-500 bg-zinc-900 px-2 py-0.5 rounded border border-zinc-800 flex-shrink-0">
+                      Local Dev Audio
+                    </span>
+                  </div>
+                ) : (
+                  <AudioPlayer src={recording.audio_url} />
+                )}
               </div>
             )}
             {recording.transcript && (
@@ -549,6 +814,47 @@ export default function LeadDetailPanel({ lead, onClose, onRefresh }: LeadDetail
           </div>
         )}
 
+        {/* 5. Email Open Analytics */}
+        {followups.length > 0 && (
+          <div className="glass-panel p-4 rounded-xl space-y-3">
+            <h4 className="text-xs font-bold text-zinc-400 uppercase tracking-wider flex items-center gap-1.5 border-b border-zinc-800/40 pb-2">
+              <Sparkles className="w-4 h-4 text-indigo-400" />
+              Email Open Analytics
+            </h4>
+            <div className="grid grid-cols-2 gap-4 text-xs">
+              <div className="bg-zinc-950/60 p-3 rounded-lg border border-zinc-900/60 text-center">
+                <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider block mb-1">Total Opens</span>
+                <span className="text-xl font-black text-white">{context.open_count || 0}</span>
+              </div>
+              <div className="bg-zinc-950/60 p-3 rounded-lg border border-zinc-900/60 text-center flex flex-col justify-center">
+                <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider block mb-1">Engagement</span>
+                <span className={`text-[11px] font-bold ${context.is_hot ? 'text-rose-400' : 'text-zinc-500'}`}>
+                  {context.is_hot ? '🔥 Hot Lead' : (context.open_count > 0 ? 'Active' : 'No activity')}
+                </span>
+              </div>
+            </div>
+            
+            {/* Open Breakdown */}
+            {context.email_opens && Object.keys(context.email_opens).length > 0 ? (
+              <div className="space-y-1.5 pt-1">
+                <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider block">Touchpoint Breakdown</span>
+                <div className="space-y-1">
+                  {Object.entries(context.email_opens).map(([touchNum, count]: [string, any]) => (
+                    <div key={touchNum} className="flex justify-between text-[11px] py-1 px-2.5 bg-zinc-900/30 rounded border border-zinc-850">
+                      <span className="text-zinc-400">Touchpoint {touchNum === '1' ? '1 (Immediate)' : touchNum}</span>
+                      <span className="font-mono font-semibold text-zinc-200">{count} {count === 1 ? 'open' : 'opens'}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <p className="text-[10px] text-zinc-600 text-center pt-1 italic select-none">
+                Waiting for the prospect to open the follow-up email.
+              </p>
+            )}
+          </div>
+        )}
+
         {/* 5. Sync Audits */}
         {syncLogs.length > 0 && (
           <div className="glass-panel p-4 rounded-xl space-y-2">
@@ -581,6 +887,21 @@ export default function LeadDetailPanel({ lead, onClose, onRefresh }: LeadDetail
           </div>
         )}
       </div>
+      
+      {/* Editor Modal */}
+      {emailDraft && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-300">
+          <FollowupDraftEditor
+            leadId={lead.id}
+            initialDraft={emailDraft}
+            onSuccess={() => {
+              setEmailDraft(null);
+              onRefresh();
+            }}
+            onCancel={() => setEmailDraft(null)}
+          />
+        </div>
+      )}
     </div>
     </div>
   );
