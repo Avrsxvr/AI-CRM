@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useRef } from 'react';
-import { Camera, RefreshCw, AlertCircle, Sparkles, Loader2, Image as ImageIcon } from 'lucide-react';
+import { Camera, RefreshCw, AlertCircle, Sparkles, Loader2, Image as ImageIcon, X } from 'lucide-react';
 
 interface CardScannerProps {
   onScanComplete: (data: {
@@ -20,6 +20,7 @@ export default function CardScanner({ onScanComplete, isProcessing: externalProc
   const [image, setImage] = useState<string | null>(null);
   const [isScanning, setIsScanning] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showMenu, setShowMenu] = useState(false);
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const uploadInputRef = useRef<HTMLInputElement>(null);
 
@@ -163,31 +164,23 @@ export default function CardScanner({ onScanComplete, isProcessing: externalProc
       />
 
       {!image ? (
-        <div className="w-full flex gap-3 h-[184px]">
-          <button
-            onClick={triggerCameraInput}
-            className="flex-1 relative flex flex-col items-center justify-center p-4 rounded-3xl bg-zinc-900 border-2 border-zinc-800 hover:border-zinc-700 hover:bg-zinc-800/80 transition-all duration-300 group overflow-hidden"
-          >
-            <div className="flex items-center justify-center w-14 h-14 rounded-full bg-zinc-800 border border-zinc-700 mb-3 group-hover:scale-105 transition-transform duration-300">
-              <Camera className="w-6 h-6 text-zinc-400 group-hover:text-zinc-300" />
-            </div>
-            <span className="text-sm font-bold tracking-wide text-zinc-100 group-hover:text-white text-center">
-              TAKE PHOTO
+        <button
+          onClick={() => setShowMenu(true)}
+          className="relative flex flex-col items-center justify-center w-full py-8 px-4 h-[184px] rounded-3xl bg-zinc-900 border-2 border-zinc-800 hover:border-zinc-700 hover:bg-zinc-800/80 transition-all duration-300 group overflow-hidden"
+        >
+          <div className="flex items-center justify-center w-16 h-16 rounded-full bg-zinc-800 border border-zinc-700 mb-3 group-hover:scale-105 transition-transform duration-300">
+            <Camera className="w-7 h-7 text-zinc-400 group-hover:text-zinc-300" />
+          </div>
+          
+          <div className="flex flex-col items-center">
+            <span className="text-lg font-bold tracking-wide text-zinc-100 group-hover:text-white">
+              SCAN BUSINESS CARD
             </span>
-          </button>
-
-          <button
-            onClick={triggerUploadInput}
-            className="flex-1 relative flex flex-col items-center justify-center p-4 rounded-3xl bg-zinc-900 border-2 border-zinc-800 hover:border-zinc-700 hover:bg-zinc-800/80 transition-all duration-300 group overflow-hidden"
-          >
-            <div className="flex items-center justify-center w-14 h-14 rounded-full bg-zinc-800 border border-zinc-700 mb-3 group-hover:scale-105 transition-transform duration-300">
-              <ImageIcon className="w-6 h-6 text-zinc-400 group-hover:text-zinc-300" />
-            </div>
-            <span className="text-sm font-bold tracking-wide text-zinc-100 group-hover:text-white text-center">
-              UPLOAD FILE
+            <span className="text-sm text-zinc-500 font-medium mt-1">
+              Tap to take photo or upload
             </span>
-          </button>
-        </div>
+          </div>
+        </button>
       ) : (
         <div className="w-full rounded-3xl overflow-hidden border border-zinc-800 bg-zinc-950/80 p-2 shadow-2xl relative group">
           <div className="relative rounded-2xl overflow-hidden aspect-[1.5/1] bg-black flex items-center justify-center">
@@ -225,6 +218,82 @@ export default function CardScanner({ onScanComplete, isProcessing: externalProc
               </button>
             </div>
           )}
+        </div>
+      )}
+
+      {/* Choice Popup Modal */}
+      {showMenu && (
+        <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-[999] flex items-end sm:items-center justify-center p-4 transition-all duration-300">
+          {/* Click outside to close */}
+          <div className="absolute inset-0" onClick={() => setShowMenu(false)} />
+          
+          <div className="relative bg-zinc-900 border border-zinc-800/80 rounded-t-[32px] sm:rounded-[32px] w-full max-w-sm overflow-hidden p-6 shadow-2xl animate-in slide-in-from-bottom-8 duration-200 z-10">
+            {/* Grab handle for mobile */}
+            <div className="w-12 h-1 bg-zinc-800 rounded-full mx-auto mb-6 sm:hidden" />
+            
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-base font-bold text-zinc-100 tracking-wide">
+                ADD BUSINESS CARD
+              </h3>
+              <button 
+                onClick={() => setShowMenu(false)}
+                className="p-1.5 rounded-full hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              {/* Option 1: Camera */}
+              <button
+                onClick={() => {
+                  setShowMenu(false);
+                  triggerCameraInput();
+                }}
+                className="w-full flex items-center gap-4 p-4 rounded-2xl bg-zinc-950/60 border border-zinc-800 hover:border-zinc-700 hover:bg-zinc-900 transition-all duration-200 group text-left"
+              >
+                <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 group-hover:scale-105 transition-transform">
+                  <Camera className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="text-sm font-bold text-zinc-100 group-hover:text-white">
+                    Take Photo
+                  </div>
+                  <div className="text-xs text-zinc-500 mt-0.5">
+                    Scan using your device camera
+                  </div>
+                </div>
+              </button>
+
+              {/* Option 2: Upload */}
+              <button
+                onClick={() => {
+                  setShowMenu(false);
+                  triggerUploadInput();
+                }}
+                className="w-full flex items-center gap-4 p-4 rounded-2xl bg-zinc-950/60 border border-zinc-800 hover:border-zinc-700 hover:bg-zinc-900 transition-all duration-200 group text-left"
+              >
+                <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 group-hover:scale-105 transition-transform">
+                  <ImageIcon className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="text-sm font-bold text-zinc-100 group-hover:text-white">
+                    Upload from Device
+                  </div>
+                  <div className="text-xs text-zinc-500 mt-0.5">
+                    Choose an existing photo or file
+                  </div>
+                </div>
+              </button>
+            </div>
+
+            <button
+              onClick={() => setShowMenu(false)}
+              className="mt-6 w-full py-3.5 bg-zinc-950 hover:bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-zinc-200 rounded-xl text-sm font-bold transition-colors"
+            >
+              Cancel
+            </button>
+          </div>
         </div>
       )}
 
