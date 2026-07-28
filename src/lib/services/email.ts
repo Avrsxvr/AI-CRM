@@ -1,21 +1,30 @@
-import { Resend } from 'resend';
+import nodemailer from 'nodemailer';
 
 export class EmailService {
   /**
-   * Initializes and returns the Resend client.
-   * Returns null if the RESEND_API_KEY is not configured, triggering sandbox fallback.
+   * Initializes and returns the Nodemailer Gmail transporter.
+   * Returns null if credentials are not configured, triggering console fallback.
    */
-  private static getClient(): Resend | null {
-    const apiKey = process.env.RESEND_API_KEY;
-    if (!apiKey) {
-      console.warn('Resend API key (RESEND_API_KEY) is missing. Email service is running in Console Log fallback mode.');
+  private static getTransporter() {
+    const user = process.env.GMAIL_USER;
+    const pass = process.env.GMAIL_APP_PASSWORD;
+
+    if (!user || !pass) {
+      console.warn('GMAIL_USER or GMAIL_APP_PASSWORD is missing. Email service is running in Console Log fallback mode.');
       return null;
     }
-    return new Resend(apiKey);
+
+    return nodemailer.createTransport({
+      service: 'gmail',
+      auth: {
+        user,
+        pass,
+      },
+    });
   }
 
   /**
-   * Sends an email using the Resend SDK, or mocks the output to the console if unconfigured.
+   * Sends an email using Nodemailer via Gmail SMTP, or mocks the output to the console if unconfigured.
    */
   public static async sendEmail(
     to: string, 
@@ -25,8 +34,8 @@ export class EmailService {
     touchPosition?: number,
     appUrl?: string
   ): Promise<string> {
-    const resend = this.getClient();
-    const fromAddress = process.env.EMAIL_FROM_ADDRESS || 'leads@yourdomain.com';
+    const transporter = this.getTransporter();
+    const fromAddress = process.env.GMAIL_USER || 'test@gmail.com';
     const fromName = process.env.EMAIL_FROM_NAME || 'Sales Team';
 
     // Format plain text breaks to HTML breaks
@@ -39,7 +48,7 @@ export class EmailService {
       htmlBody += `<br /><br /><img src="${trackingUrl}" width="1" height="1" style="display:none;" alt="" />`;
     }
 
-    if (!resend) {
+    if (!transporter) {
       // Mock sending by logging to output console
       console.log(`
 ==================================================
@@ -57,23 +66,16 @@ ${htmlBody}
     }
 
     try {
-      // Safety override for Resend free tier testing
-      const finalTo = fromAddress === 'onboarding@resend.dev' ? ['avrsmain@gmail.com'] : [to];
-
-      const response = await resend.emails.send({
+      const info = await transporter.sendMail({
         from: `"${fromName}" <${fromAddress}>`,
-        to: finalTo,
+        to: to,
         subject: subject,
         html: htmlBody,
       });
 
-      if (response.error) {
-        throw new Error(response.error.message);
-      }
-
-      return response.data?.id || 'resend-success-id';
+      return info.messageId || 'nodemailer-success-id';
     } catch (error: any) {
-      throw new Error(`Resend API error: ${error.message || error}`);
+      throw new Error(`Nodemailer API error: ${error.message || error}`);
     }
   }
 }
