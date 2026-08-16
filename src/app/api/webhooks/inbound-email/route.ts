@@ -1,0 +1,88 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { supabaseAdmin } from '@/lib/supabase';
+import { ReplyHandlingAgent } from '@/lib/agents/replyHandling';
+import { SettingsService } from '@/lib/services/settings';
+
+export async function POST(req: NextRequest) {
+  try {
+    const body = await req.json();
+    
+    // Webhook payload standard (SendGrid/Resend style mock)
+    const { from_email, text, subject } = body;
+
+    if (!from_email || !text) {
+      return NextResponse.json({ error: 'Missing from_email or text' }, { status: 400 });
+    }
+
+    // 1. Find the lead by email
+    const { data: lead, error: leadError } = await supabaseAdmin
+      .from('leads')
+      .select('id, organization_id, contact_fields, context_summary, sequence_status')
+      // Note: We search the JSONB contact_fields for the email. This requires casting in Supabase,
+      // but for simplicity, we'll fetch leads and filter, or use a specific exact query if indexed.
+      // A more scalable way is storing 'email' as a top-level column, but for now we filter in JS.
+      // We will do a generic fetch for demo purposes.
+      .limit(100);
+
+    if (leadError) throw leadError;
+
+    const matchedLead = lead?.find(l => l.contact_fields?.email?.toLowerCase() === from_email.toLowerCase());
+
+    if (!matchedLead) {
+      return NextResponse.json({ message: 'Lead not found for this email, ignoring.' }, { status: 200 });
+    }
+
+    // 2. Pause the automated drip
+    // Cancel any pending followups so they don't get spammed
+    await supabaseAdmin
+      .from('followups')
+      .update({ status: 'cancelled' })
+      .eq('lead_id', matchedLead.id)
+      .eq('status', 'scheduled');
+
+    await supabaseAdmin
+      .from('leads')
+      .update({ sequence_status: 'paused', has_replied: true })
+      .eq('id', matchedLead.id);
+
+    // 3. Analyze and Draft using Gemini
+    const settings = await SettingsService.getSettings(matchedLead.organization_id);
+    const apiKey = settings.gemini_api_key;
+    if (!apiKey) {
+      throw new Error('Gemini API key is not configured for this organization.');
+    }
+
+    const aiAnalysis = await ReplyHandlingAgent.analyzeAndDraft(apiKey, text, {
+      name: matchedLead.contact_fields?.name,
+      company: matchedLead.contact_fields?.company,
+      context_summary: matchedLead.context_summary
+    });
+
+    // 4. Create Notification
+    const notificationTitle = `Reply Received (${aiAnalysis.sentiment}): ${matchedLead.contact_fields?.name || 'Prospect'}`;
+    const notificationMessage = `They replied: "${text.substring(0, 60)}..." The AI drafted a rebuttal. Review it now.`;
+
+    await supabaseAdmin
+      .from('notifications')
+      .insert({
+        organization_id: matchedLead.organization_id,
+        lead_id: matchedLead.id,
+        type: 'reply_received',
+        title: notificationTitle,
+        message: notificationMessage,
+        action_data: {
+          original_reply: text,
+          original_subject: subject,
+          sentiment: aiAnalysis.sentiment,
+          draft_subject: aiAnalysis.draft_subject,
+          draft_body: aiAnalysis.draft_body
+        }
+      });
+
+    return NextResponse.json({ message: 'Reply processed successfully, drip paused, notification created.' }, { status: 200 });
+
+  } catch (error: any) {
+    console.error('Inbound Email Webhook Error:', error);
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+}

@@ -19,10 +19,9 @@ export class CardOcrAgent {
    * Processes a base64 business card image and returns structured contact fields.
    * Uses Google Generative AI SDK directly for native image support.
    */
-  public static async processCard(imageBase64: string, mimeType: string): Promise<CardOcrOutput> {
-    const apiKey = process.env.GEMINI_API_KEY;
+  public static async processCard(apiKey: string, imageBase64: string, mimeType: string): Promise<CardOcrOutput> {
     if (!apiKey) {
-      throw new Error('Gemini API key (GEMINI_API_KEY) is missing in environment variables.');
+      throw new Error('Gemini API key is required but was not provided.');
     }
 
     const genAI = new GoogleGenerativeAI(apiKey);

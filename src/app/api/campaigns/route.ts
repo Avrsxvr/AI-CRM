@@ -1,12 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { CampaignsRepository } from '@/lib/repositories/campaigns';
-
-// MOCK ORG ID FOR DEVELOPMENT (Replace with auth context in SaaS)
-const MOCK_ORG_ID = '00000000-0000-0000-0000-000000000000';
+import { getCurrentUserOrgId } from '@/lib/auth';
+import { createClient } from '@/utils/supabase/server';
 
 export async function GET(req: NextRequest) {
   try {
-    const campaigns = await CampaignsRepository.getCampaigns(MOCK_ORG_ID);
+    const orgId = await getCurrentUserOrgId();
+    if (!orgId) {
+      return NextResponse.json({ data: null, error: { message: 'Unauthorized' } }, { status: 401 });
+    }
+
+    const supabase = await createClient();
+    const campaigns = await CampaignsRepository.getCampaigns(supabase, orgId);
     return NextResponse.json({ data: campaigns, error: null });
   } catch (error: any) {
     console.error('Failed to fetch campaigns:', error);
@@ -19,6 +24,11 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
+    const orgId = await getCurrentUserOrgId();
+    if (!orgId) {
+      return NextResponse.json({ data: null, error: { message: 'Unauthorized' } }, { status: 401 });
+    }
+
     const body = await req.json();
     const { name, description } = body;
 
@@ -29,8 +39,9 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const campaign = await CampaignsRepository.createCampaign({
-      organization_id: MOCK_ORG_ID,
+    const supabase = await createClient();
+    const campaign = await CampaignsRepository.createCampaign(supabase, {
+      organization_id: orgId,
       name,
       description
     });

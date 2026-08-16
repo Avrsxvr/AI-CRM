@@ -31,14 +31,14 @@ export default function LeadStatusBadge({ status }: LeadStatusBadgeProps) {
         };
       case 'confirmed':
         return {
-          bg: 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20',
+          bg: 'bg-slate-800/10 text-slate-600 border-blue-500/20',
           dot: 'bg-indigo-400 shadow-[0_0_8px_#6366f1]',
           label: 'Confirmed',
         };
       case 'capturing':
       default:
         return {
-          bg: 'bg-zinc-800 text-zinc-400 border-zinc-700',
+          bg: 'bg-slate-100 text-slate-500 border-zinc-700',
           dot: 'bg-zinc-500',
           label: 'Capturing',
         };

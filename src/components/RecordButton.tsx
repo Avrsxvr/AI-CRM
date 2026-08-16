@@ -126,9 +126,9 @@ export default function RecordButton({ onRecordingComplete, isProcessing = false
 
   if (isProcessing) {
     return (
-      <div className="flex flex-col items-center justify-center py-8 px-4 bg-indigo-950/20 border border-indigo-500/20 rounded-3xl w-full h-[184px]">
-        <Loader2 className="w-8 h-8 text-indigo-400 animate-spin mb-3" />
-        <p className="text-sm font-medium text-zinc-300">Extracting context...</p>
+      <div className="flex flex-col items-center justify-center py-8 px-4 bg-indigo-950/20 border border-blue-500/20 rounded-3xl w-full h-[184px]">
+        <Loader2 className="w-8 h-8 text-slate-600 animate-spin mb-3" />
+        <p className="text-sm font-medium text-slate-700">Extracting context...</p>
       </div>
     );
   }
@@ -142,7 +142,7 @@ export default function RecordButton({ onRecordingComplete, isProcessing = false
           className={`relative flex flex-col items-center justify-center py-8 px-4 h-[184px] rounded-3xl transition-all duration-500 group overflow-hidden ${
             isRecording 
               ? 'bg-emerald-500/10 border-2 border-emerald-500/50 hover:bg-emerald-500/20 flex-1' 
-              : 'bg-indigo-600 border-2 border-transparent hover:bg-indigo-500 neon-glow-primary w-full'
+              : 'bg-blue-600 border-2 border-transparent hover:bg-slate-800 shadow-sm w-full'
           }`}
         >
           {isRecording && (
@@ -151,14 +151,14 @@ export default function RecordButton({ onRecordingComplete, isProcessing = false
           
           <div className={`flex items-center justify-center w-16 h-16 rounded-full mb-3 shadow-lg transition-transform duration-300 ${isRecording ? 'bg-emerald-500 scale-110 shadow-emerald-500/50' : 'bg-white/20 group-hover:scale-105'}`}>
             {isRecording ? (
-              <Square className="w-6 h-6 text-white fill-current" />
+              <Square className="w-6 h-6 text-slate-900 fill-current" />
             ) : (
-              <Mic className="w-7 h-7 text-white" />
+              <Mic className="w-7 h-7 text-slate-900" />
             )}
           </div>
           
           <div className="flex flex-col items-center relative z-10">
-            <span className={`text-lg font-bold tracking-wide ${isRecording ? 'text-emerald-400' : 'text-white'}`}>
+            <span className={`text-lg font-bold tracking-wide ${isRecording ? 'text-emerald-400' : 'text-slate-900'}`}>
               {isRecording ? 'SAVE & EXTRACT' : 'RECORD CONVERSATION'}
             </span>
             {isRecording ? (

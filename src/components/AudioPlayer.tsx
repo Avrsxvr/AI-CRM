@@ -95,7 +95,7 @@ export default function AudioPlayer({ src }: AudioPlayerProps) {
   };
 
   return (
-    <div className="flex items-center gap-3 bg-zinc-950/80 border border-zinc-800/80 px-4 py-2.5 rounded-2xl w-full">
+    <div className="flex items-center gap-3 bg-white/90 border border-slate-200/80 px-4 py-2.5 rounded-2xl w-full">
       {/* Play/Pause Button */}
       <button
         onClick={togglePlay}
@@ -105,7 +105,7 @@ export default function AudioPlayer({ src }: AudioPlayerProps) {
       </button>
 
       {/* Time Display */}
-      <span className="text-[10px] font-mono text-zinc-400 select-none flex-shrink-0 w-24">
+      <span className="text-[10px] font-mono text-slate-500 select-none flex-shrink-0 w-24">
         {formatTime(currentTime)} / {formatTime(duration)}
       </span>
 
@@ -117,7 +117,7 @@ export default function AudioPlayer({ src }: AudioPlayerProps) {
         max={duration || 100}
         value={currentTime}
         onChange={handleSeek}
-        className="flex-1 h-1 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-indigo-500 hover:accent-indigo-400 focus:outline-none outline-none"
+        className="flex-1 h-1 bg-slate-100 rounded-lg appearance-none cursor-pointer accent-indigo-500 hover:accent-indigo-400 focus:outline-none outline-none"
         style={{
           background: `linear-gradient(to right, #6366f1 0%, #6366f1 ${((currentTime / (duration || 1)) * 100).toFixed(2)}%, #27272a ${((currentTime / (duration || 1)) * 100).toFixed(2)}%, #27272a 100%)`
         }}
@@ -126,7 +126,7 @@ export default function AudioPlayer({ src }: AudioPlayerProps) {
       {/* Mute/Volume Button */}
       <button
         onClick={toggleMute}
-        className="p-1 rounded text-zinc-400 hover:text-white transition-colors flex-shrink-0"
+        className="p-1 rounded text-slate-500 hover:text-slate-900 transition-colors flex-shrink-0"
       >
         {isMuted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
       </button>

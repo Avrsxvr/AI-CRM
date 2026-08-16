@@ -19,10 +19,9 @@ export class ContextExtractionAgent {
    * Transcribes audio and extracts structured sales context in one multimodal pass.
    * Employs Gemini 1.5 Flash for high-speed, cost-effective processing.
    */
-  public static async extractContext(audioBase64: string, mimeType: string): Promise<ContextExtractionOutput> {
-    const apiKey = process.env.GEMINI_API_KEY;
+  public static async extractContext(apiKey: string, audioBase64: string, mimeType: string): Promise<ContextExtractionOutput> {
     if (!apiKey) {
-      throw new Error('Gemini API key (GEMINI_API_KEY) is missing in environment variables.');
+      throw new Error('Gemini API key is required but was not provided.');
     }
 
     if (!audioBase64) {

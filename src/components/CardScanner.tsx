@@ -138,9 +138,9 @@ export default function CardScanner({ onScanComplete, isProcessing: externalProc
 
   if (externalProcessing) {
     return (
-      <div className="flex flex-col items-center justify-center py-8 px-4 bg-indigo-950/20 border border-indigo-500/20 rounded-3xl w-full h-[184px]">
-        <Loader2 className="w-8 h-8 text-indigo-400 animate-spin mb-3" />
-        <p className="text-sm font-medium text-zinc-300">Extracting fields...</p>
+      <div className="flex flex-col items-center justify-center py-8 px-4 bg-indigo-950/20 border border-blue-500/20 rounded-3xl w-full h-[184px]">
+        <Loader2 className="w-8 h-8 text-slate-600 animate-spin mb-3" />
+        <p className="text-sm font-medium text-slate-700">Extracting fields...</p>
       </div>
     );
   }
@@ -166,24 +166,24 @@ export default function CardScanner({ onScanComplete, isProcessing: externalProc
       {!image ? (
         <button
           onClick={() => setShowMenu(true)}
-          className="relative flex flex-col items-center justify-center w-full py-8 px-4 h-[184px] rounded-3xl bg-zinc-900 border-2 border-zinc-800 hover:border-zinc-700 hover:bg-zinc-800/80 transition-all duration-300 group overflow-hidden"
+          className="relative flex flex-col items-center justify-center w-full py-8 px-4 h-[184px] rounded-3xl bg-slate-50 border-2 border-slate-200 hover:border-zinc-700 hover:bg-slate-100/80 transition-all duration-300 group overflow-hidden"
         >
-          <div className="flex items-center justify-center w-16 h-16 rounded-full bg-zinc-800 border border-zinc-700 mb-3 group-hover:scale-105 transition-transform duration-300">
-            <Camera className="w-7 h-7 text-zinc-400 group-hover:text-zinc-300" />
+          <div className="flex items-center justify-center w-16 h-16 rounded-full bg-slate-100 border border-zinc-700 mb-3 group-hover:scale-105 transition-transform duration-300">
+            <Camera className="w-7 h-7 text-slate-500 group-hover:text-slate-700" />
           </div>
           
           <div className="flex flex-col items-center">
-            <span className="text-lg font-bold tracking-wide text-zinc-100 group-hover:text-white">
+            <span className="text-lg font-bold tracking-wide text-slate-900 group-hover:text-slate-900">
               SCAN BUSINESS CARD
             </span>
-            <span className="text-sm text-zinc-500 font-medium mt-1">
+            <span className="text-sm text-slate-400 font-medium mt-1">
               Tap to take photo or upload
             </span>
           </div>
         </button>
       ) : (
-        <div className="w-full rounded-3xl overflow-hidden border border-zinc-800 bg-zinc-950/80 p-2 shadow-2xl relative group">
-          <div className="relative rounded-2xl overflow-hidden aspect-[1.5/1] bg-black flex items-center justify-center">
+        <div className="w-full rounded-3xl overflow-hidden border border-slate-200 bg-white/90 p-2 shadow-2xl relative group">
+          <div className="relative rounded-2xl overflow-hidden aspect-[1.5/1] bg-white flex items-center justify-center">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img 
               src={image} 
@@ -194,8 +194,8 @@ export default function CardScanner({ onScanComplete, isProcessing: externalProc
             {isBusy && (
               <div className="absolute inset-0 flex flex-col items-center justify-center z-20">
                 <div className="absolute inset-x-0 h-0.5 bg-gradient-to-r from-transparent via-indigo-500 to-transparent shadow-[0_0_15px_#6366f1] animate-[scan_2s_ease-in-out_infinite]"></div>
-                <Loader2 className="w-10 h-10 text-white animate-spin drop-shadow-xl" />
-                <span className="text-white font-semibold mt-2 drop-shadow-md tracking-wider text-sm uppercase">Analyzing</span>
+                <Loader2 className="w-10 h-10 text-slate-900 animate-spin drop-shadow-xl" />
+                <span className="text-slate-900 font-semibold mt-2 drop-shadow-md tracking-wider text-sm uppercase">Analyzing</span>
               </div>
             )}
           </div>
@@ -204,14 +204,14 @@ export default function CardScanner({ onScanComplete, isProcessing: externalProc
             <div className="flex gap-2 mt-2">
               <button
                 onClick={resetScanner}
-                className="flex-1 py-3 bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 rounded-xl text-sm font-medium text-zinc-400 hover:text-zinc-200 transition-colors flex items-center justify-center gap-2"
+                className="flex-1 py-3 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl text-sm font-medium text-slate-500 hover:text-zinc-200 transition-colors flex items-center justify-center gap-2"
               >
                 <RefreshCw className="w-4 h-4" />
                 Retake
               </button>
               <button
                 onClick={handleScan}
-                className="flex-[2] py-3 bg-indigo-600 hover:bg-indigo-500 rounded-xl text-sm font-bold text-white transition-colors flex items-center justify-center gap-2 neon-glow-primary"
+                className="flex-[2] py-3 bg-blue-600 hover:bg-slate-800 rounded-xl text-sm font-bold text-slate-900 transition-colors flex items-center justify-center gap-2 shadow-sm"
               >
                 <Sparkles className="w-4 h-4" />
                 Extract Details
@@ -223,21 +223,21 @@ export default function CardScanner({ onScanComplete, isProcessing: externalProc
 
       {/* Choice Popup Modal */}
       {showMenu && (
-        <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-[999] flex items-end sm:items-center justify-center p-4 transition-all duration-300">
+        <div className="fixed inset-0 bg-white/75 backdrop-blur-sm z-[999] flex items-end sm:items-center justify-center p-4 transition-all duration-300">
           {/* Click outside to close */}
           <div className="absolute inset-0" onClick={() => setShowMenu(false)} />
           
-          <div className="relative bg-zinc-900 border border-zinc-800/80 rounded-t-[32px] sm:rounded-[32px] w-full max-w-sm overflow-hidden p-6 shadow-2xl animate-in slide-in-from-bottom-8 duration-200 z-10">
+          <div className="relative bg-slate-50 border border-slate-200/80 rounded-t-[32px] sm:rounded-[32px] w-full max-w-sm overflow-hidden p-6 shadow-2xl animate-in slide-in-from-bottom-8 duration-200 z-10">
             {/* Grab handle for mobile */}
-            <div className="w-12 h-1 bg-zinc-800 rounded-full mx-auto mb-6 sm:hidden" />
+            <div className="w-12 h-1 bg-slate-100 rounded-full mx-auto mb-6 sm:hidden" />
             
             <div className="flex justify-between items-center mb-6">
-              <h3 className="text-base font-bold text-zinc-100 tracking-wide">
+              <h3 className="text-base font-bold text-slate-900 tracking-wide">
                 ADD BUSINESS CARD
               </h3>
               <button 
                 onClick={() => setShowMenu(false)}
-                className="p-1.5 rounded-full hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 transition-colors"
+                className="p-1.5 rounded-full hover:bg-slate-100 text-slate-500 hover:text-zinc-200 transition-colors"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -250,16 +250,16 @@ export default function CardScanner({ onScanComplete, isProcessing: externalProc
                   setShowMenu(false);
                   triggerCameraInput();
                 }}
-                className="w-full flex items-center gap-4 p-4 rounded-2xl bg-zinc-950/60 border border-zinc-800 hover:border-zinc-700 hover:bg-zinc-900 transition-all duration-200 group text-left"
+                className="w-full flex items-center gap-4 p-4 rounded-2xl bg-white/60 border border-slate-200 hover:border-zinc-700 hover:bg-slate-50 transition-all duration-200 group text-left"
               >
-                <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 group-hover:scale-105 transition-transform">
+                <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-slate-800/10 border border-blue-500/20 text-slate-600 group-hover:scale-105 transition-transform">
                   <Camera className="w-5 h-5" />
                 </div>
                 <div>
-                  <div className="text-sm font-bold text-zinc-100 group-hover:text-white">
+                  <div className="text-sm font-bold text-slate-900 group-hover:text-slate-900">
                     Take Photo
                   </div>
-                  <div className="text-xs text-zinc-500 mt-0.5">
+                  <div className="text-xs text-slate-400 mt-0.5">
                     Scan using your device camera
                   </div>
                 </div>
@@ -271,16 +271,16 @@ export default function CardScanner({ onScanComplete, isProcessing: externalProc
                   setShowMenu(false);
                   triggerUploadInput();
                 }}
-                className="w-full flex items-center gap-4 p-4 rounded-2xl bg-zinc-950/60 border border-zinc-800 hover:border-zinc-700 hover:bg-zinc-900 transition-all duration-200 group text-left"
+                className="w-full flex items-center gap-4 p-4 rounded-2xl bg-white/60 border border-slate-200 hover:border-zinc-700 hover:bg-slate-50 transition-all duration-200 group text-left"
               >
                 <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 group-hover:scale-105 transition-transform">
                   <ImageIcon className="w-5 h-5" />
                 </div>
                 <div>
-                  <div className="text-sm font-bold text-zinc-100 group-hover:text-white">
+                  <div className="text-sm font-bold text-slate-900 group-hover:text-slate-900">
                     Upload from Device
                   </div>
-                  <div className="text-xs text-zinc-500 mt-0.5">
+                  <div className="text-xs text-slate-400 mt-0.5">
                     Choose an existing photo or file
                   </div>
                 </div>
@@ -289,7 +289,7 @@ export default function CardScanner({ onScanComplete, isProcessing: externalProc
 
             <button
               onClick={() => setShowMenu(false)}
-              className="mt-6 w-full py-3.5 bg-zinc-950 hover:bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-zinc-200 rounded-xl text-sm font-bold transition-colors"
+              className="mt-6 w-full py-3.5 bg-white hover:bg-slate-50 border border-slate-200 text-slate-500 hover:text-zinc-200 rounded-xl text-sm font-bold transition-colors"
             >
               Cancel
             </button>

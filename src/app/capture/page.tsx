@@ -3,11 +3,13 @@
 import React, { useState } from 'react';
 import RecordButton from '@/components/RecordButton';
 import CardScanner from '@/components/CardScanner';
+import BulkCardScanner from '@/components/BulkCardScanner';
+import NotesScanner from '@/components/NotesScanner';
 import ExtractedFieldsForm from '@/components/ExtractedFieldsForm';
 import FollowupDraftEditor from '@/components/FollowupDraftEditor';
-import { Sparkles, CheckCircle2, ChevronRight, User, ShieldCheck, Play, Save, AlertCircle } from 'lucide-react';
+import { Sparkles, CheckCircle2, ChevronRight, User, ShieldCheck, Play, Save, AlertCircle, Loader2 } from 'lucide-react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { OfflineStorage } from '@/lib/services/offline';
 
 interface ExtractedContact {
@@ -20,11 +22,22 @@ interface ExtractedContact {
   image?: string;
 }
 
-export default function CaptureDashboard() {
+function CaptureDashboardContent() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const campaignId = searchParams.get('campaignId');
+
+  const [mode, setMode] = useState<'card_choice' | 'voice' | 'card' | 'notes' | 'bulk' | 'review'>('card_choice');
+
   const [leadId, setLeadId] = useState<string | null>(null);
+  
+  // Event Tracking States
+  const [exhibition, setExhibition] = useState<string>('');
+  const [stall, setStall] = useState<string>('');
   
   // Processing States
   const [audioProcessing, setAudioProcessing] = useState(false);
+  const [notesProcessing, setNotesProcessing] = useState(false);
   const [cardProcessing, setCardProcessing] = useState(false);
   const [isDrafting, setIsDrafting] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -44,10 +57,16 @@ export default function CaptureDashboard() {
   const [syncSystem, setSyncSystem] = useState<'zoho' | 'sheets' | null>(null);
   const [isComplete, setIsComplete] = useState(false);
 
+  // Bulk Processing States
+  const [verificationQueue, setVerificationQueue] = useState<string[]>([]);
+  const [queueIndex, setQueueIndex] = useState<number>(-1);
+  const [isBulkAutoSaving, setIsBulkAutoSaving] = useState(false);
+  const [bulkProgress, setBulkProgress] = useState({ processed: 0, total: 0, successes: 0, failures: 0 });
+
   // Modals
   const [showFieldsModal, setShowFieldsModal] = useState(false);
 
-  const mockOrganizationId = '738de77c-ddd0-4a71-9d8d-3e346590ca0d';
+  const mockOrganizationId = process.env.NEXT_PUBLIC_ORGANIZATION_ID || '738de77c-ddd0-4a71-9d8d-3e346590ca0d';
   const mockUserId = null;
 
   // Initialize DB if not already initialized
@@ -57,7 +76,11 @@ export default function CaptureDashboard() {
       const response = await fetch('/api/leads/recording/start', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ organizationId: mockOrganizationId, userId: mockUserId }),
+        body: JSON.stringify({ 
+          organizationId: mockOrganizationId, 
+          userId: mockUserId,
+          campaignId: campaignId || null
+        }),
       });
       const result = await response.json();
       if (response.ok && result.data?.leadId) {
@@ -96,6 +119,7 @@ export default function CaptureDashboard() {
         console.error('Failed to convert offline audio to base64:', err);
       } finally {
         setAudioProcessing(false);
+        setMode('review');
       }
       return;
     }
@@ -125,7 +149,20 @@ export default function CaptureDashboard() {
       console.error('Audio processing failed:', e);
     } finally {
       setAudioProcessing(false);
+      setMode('review');
     }
+  };
+
+  const handleNotesScanComplete = async (data: any) => {
+    // If offline, bypass for now or just set state
+    if (typeof window !== 'undefined' && !navigator.onLine) {
+      setContext(data);
+    } else {
+      await ensureLeadId();
+      setContext(data);
+    }
+    // Advance to voice step
+    setMode('voice');
   };
 
   const handleScanComplete = async (data: any) => {
@@ -136,14 +173,115 @@ export default function CaptureDashboard() {
       return;
     }
     const activeLeadId = await ensureLeadId();
-    // In a real app we'd map this ID to the card scan record if they happen sequentially.
     setExtractedFields(data);
     setShowFieldsModal(true);
+  };
+
+  const handleBulkImagesSelected = (images: string[]) => {
+    setVerificationQueue(images);
+    setQueueIndex(-1); // Waiting for user choice
+  };
+
+  const processCardForManualReview = async (index: number) => {
+    if (index >= verificationQueue.length) {
+      router.push(campaignId ? `/campaigns/${campaignId}` : '/leads');
+      return;
+    }
+    setCardProcessing(true);
+    setExtractedFields(null);
+    setLeadId(null);
+    try {
+      const activeLeadId = await ensureLeadId();
+      const response = await fetch('/api/leads/card-scan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ image: verificationQueue[index] }),
+      });
+      if (response.ok) {
+        const result = await response.json();
+        setExtractedFields({ ...result.data, image: verificationQueue[index] });
+        setShowFieldsModal(true);
+      }
+    } catch (e) {
+      console.error('Manual card processing failed:', e);
+    } finally {
+      setCardProcessing(false);
+    }
+  };
+
+  const startManualReview = async () => {
+    setQueueIndex(0);
+    await processCardForManualReview(0);
+  };
+
+  const handleNextInQueue = () => {
+    setShowFieldsModal(false);
+    const nextIndex = queueIndex + 1;
+    setQueueIndex(nextIndex);
+    processCardForManualReview(nextIndex);
+  };
+
+  const startAutoSaveAll = async () => {
+    setIsBulkAutoSaving(true);
+    setBulkProgress({ processed: 0, total: verificationQueue.length, successes: 0, failures: 0 });
+    
+    for (let i = 0; i < verificationQueue.length; i++) {
+      try {
+        const base64 = verificationQueue[i];
+        
+        const scanRes = await fetch('/api/leads/card-scan', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ image: base64 }),
+        });
+        if (!scanRes.ok) throw new Error('OCR Failed');
+        const scanResult = await scanRes.json();
+        const extracted = scanResult.data;
+
+        const initRes = await fetch('/api/leads/recording/start', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            organizationId: mockOrganizationId, 
+            userId: mockUserId,
+            campaignId: campaignId || null
+          }),
+        });
+        if (!initRes.ok) throw new Error('Init Failed');
+        const initResult = await initRes.json();
+        const newLeadId = initResult.data.leadId;
+
+        const saveRes = await fetch(`/api/leads/${newLeadId}/save`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            contactFields: extracted,
+            cardImage: base64,
+            confidence: typeof extracted.confidence === 'number' ? (extracted.confidence / 100) : 1.0,
+            campaignId: campaignId || null,
+            exhibition: exhibition || null,
+            stall: stall || null
+          }),
+        });
+        if (!saveRes.ok) throw new Error('Save Failed');
+
+        setBulkProgress(prev => ({ ...prev, processed: prev.processed + 1, successes: prev.successes + 1 }));
+      } catch (err) {
+        console.error('Auto-save failed for card', i, err);
+        setBulkProgress(prev => ({ ...prev, processed: prev.processed + 1, failures: prev.failures + 1 }));
+      }
+    }
+    
+    setTimeout(() => {
+      router.push(campaignId ? `/campaigns/${campaignId}` : '/leads');
+    }, 1500);
   };
 
   const handleConfirmFields = async (confirmedFields: ExtractedContact) => {
     setExtractedFields(confirmedFields);
     setShowFieldsModal(false);
+    // Advance to notes step
+    setMode('notes');
   };
 
   const handleGenerateDraft = async () => {
@@ -191,9 +329,12 @@ export default function CaptureDashboard() {
           audioBase64: offlineAudioBase64,
           audioMimeType: audioBlobType,
           cardImageBase64: extractedFields.image || null,
+          campaignId: campaignId || null,
+          exhibition: exhibition || null,
+          stall: stall || null,
         });
         
-        router.push('/leads');
+        router.push(campaignId ? `/campaigns/${campaignId}` : '/leads');
       } catch (err) {
         console.error('Failed to save lead offline:', err);
         setSaveError('Failed to cache lead locally. Browser storage might be full.');
@@ -215,12 +356,19 @@ export default function CaptureDashboard() {
             cardImage: extractedFields.image || null,
             confidence: typeof extractedFields.confidence === 'number' 
               ? (extractedFields.confidence / 100) 
-              : 1.0
+              : 1.0,
+            campaignId: campaignId || null,
+            exhibition: exhibition || null,
+            stall: stall || null
           }),
         });
         if (!res.ok) throw new Error('Failed to save to database');
         
-        router.push('/leads');
+        if (verificationQueue.length > 0 && queueIndex >= 0) {
+          handleNextInQueue();
+        } else {
+          router.push(campaignId ? `/campaigns/${campaignId}` : '/leads');
+        }
       } catch (e: any) {
         console.error('Failed to save draft:', e);
         setSaveError('Failed to save. Please check your connection and try again.');
@@ -228,7 +376,7 @@ export default function CaptureDashboard() {
         setIsSaving(false);
       }
     } else {
-      router.push('/leads');
+      router.push(campaignId ? `/campaigns/${campaignId}` : '/leads');
     }
   };
 
@@ -247,45 +395,78 @@ export default function CaptureDashboard() {
     setEmailDraft(null);
     setIsComplete(false);
     setSyncSystem(null);
+    setMode('card_choice');
   };
 
   // We only show the Generate Draft button if we have contact fields (since we need an email to send to).
   // The transcript is optional (can send a generic intro just from a card).
   const canGenerateDraft = extractedFields !== null;
-  const router = useRouter();
 
   return (
-    <div className="min-h-screen bg-black text-zinc-100 flex flex-col p-4 md:p-8 font-sans relative overflow-hidden">
+    <div className="min-h-screen bg-[#f8fafc] text-slate-900 flex flex-col p-4 md:p-8 font-sans relative overflow-hidden">
       {/* Premium Background Elements */}
-      <div className="absolute top-0 left-1/4 w-96 h-96 bg-indigo-600/20 rounded-full blur-[120px] pointer-events-none"></div>
-      <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-teal-600/10 rounded-full blur-[100px] pointer-events-none"></div>
+      <div className="absolute top-0 left-1/4 w-[500px] h-[500px] bg-blue-600/5 rounded-full blur-[120px] pointer-events-none"></div>
+      <div className="absolute bottom-0 right-1/4 w-[500px] h-[500px] bg-emerald-600/5 rounded-full blur-[100px] pointer-events-none"></div>
 
-      {/* Header */}
-      <header className="w-full max-w-5xl flex items-center justify-between py-6 z-10">
-        <Link href="/leads" className="text-sm text-zinc-400 hover:text-white transition-colors font-medium">
-          ← Dashboard
+      {/* Premium Header */}
+      <header className="w-full max-w-6xl mx-auto flex flex-col md:flex-row md:items-center justify-between py-4 z-10 gap-6">
+        <Link 
+          href={campaignId ? `/campaigns/${campaignId}` : "/leads"} 
+          className="group flex items-center gap-2 text-sm text-slate-500 hover:text-blue-600 transition-colors font-semibold"
+        >
+          <div className="w-8 h-8 rounded-full bg-white border border-slate-200 flex items-center justify-center shadow-sm group-hover:border-blue-200 group-hover:shadow-md transition-all">
+            <ChevronRight className="w-4 h-4 rotate-180" />
+          </div>
+          {campaignId ? 'Back to Campaign' : 'Back to Dashboard'}
         </Link>
-        <div className="flex items-center gap-2 bg-white/5 border border-white/10 px-4 py-1.5 rounded-full backdrop-blur-md">
-          <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
-          <span className="text-xs font-semibold tracking-wider text-zinc-300 uppercase">Live Workspace</span>
-        </div>
+        
+          <div className="flex items-center gap-2 bg-white border border-slate-200 p-1.5 rounded-2xl shadow-sm">
+            {[
+              { id: 'card_choice', label: '1. Card', icon: <span className="mr-1">💳</span>, match: ['card_choice', 'card', 'bulk'] },
+              { id: 'notes', label: '2. Notes', icon: <span className="mr-1">📝</span>, match: ['notes'] },
+              { id: 'voice', label: '3. Voice', icon: <span className="mr-1">🎙️</span>, match: ['voice'] },
+              { id: 'review', label: '4. Review', icon: <span className="mr-1">✨</span>, match: ['review'] }
+            ].map((step) => {
+              const isActive = step.match.includes(mode);
+              return (
+                <button
+                  key={step.id}
+                  onClick={() => setMode(step.id as any)}
+                  className={`flex items-center px-4 py-2 text-xs font-bold rounded-xl transition-all duration-300 ${
+                    isActive 
+                      ? 'bg-blue-600 text-white shadow-md transform scale-[1.02]' 
+                      : 'text-slate-500 hover:text-slate-900 hover:bg-slate-50'
+                  }`}
+                >
+                  {step.icon}
+                  <span className="hidden sm:inline">{step.label}</span>
+                </button>
+              );
+            })}
+          </div>
+          
+          <div className="hidden md:flex items-center gap-2 bg-white border border-slate-200 px-4 py-2 rounded-xl shadow-sm">
+            <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></div>
+            <span className="text-[10px] font-bold tracking-widest text-slate-600 uppercase">Live Workspace</span>
+          </div>
       </header>
 
       {isComplete ? (
-        <div className="flex-1 w-full max-w-lg flex flex-col items-center justify-center z-10 animate-in fade-in slide-in-from-bottom-8 duration-700">
-          <div className="glass-panel p-10 rounded-3xl w-full text-center space-y-6 shadow-2xl border border-emerald-500/20 bg-emerald-950/10">
-            <div className="w-24 h-24 bg-emerald-500/20 text-emerald-400 rounded-full flex items-center justify-center mx-auto border border-emerald-500/30 neon-glow-secondary">
+        <div className="flex-1 w-full max-w-lg mx-auto flex flex-col items-center justify-center z-10 animate-in fade-in slide-in-from-bottom-8 duration-700">
+          <div className="bg-white border border-slate-200 rounded-3xl w-full text-center space-y-6 shadow-xl p-10 border-t-4 border-t-emerald-500 relative overflow-hidden">
+            <div className="absolute top-0 left-0 w-full h-full bg-emerald-50 opacity-30 pointer-events-none"></div>
+            <div className="w-24 h-24 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto shadow-inner relative z-10">
               <CheckCircle2 className="w-12 h-12" />
             </div>
-            <div className="space-y-3">
-              <h3 className="text-2xl font-bold text-white tracking-tight">Lead Captured!</h3>
-              <p className="text-sm text-zinc-400 leading-relaxed px-4">
-                Profile synced to <span className="text-emerald-400 font-semibold">{syncSystem === 'zoho' ? 'Zoho CRM' : 'Google Sheets'}</span> and the personalized intro email is on its way.
+            <div className="space-y-3 relative z-10">
+              <h3 className="text-3xl font-black text-slate-900 tracking-tight">Lead Captured!</h3>
+              <p className="text-base text-slate-500 leading-relaxed px-4">
+                Profile synced to <span className="text-emerald-600 font-bold">{syncSystem === 'zoho' ? 'Zoho CRM' : 'Google Sheets'}</span> and the personalized intro email is on its way.
               </p>
             </div>
             <button
               onClick={handleReset}
-              className="w-full mt-6 py-4 rounded-2xl bg-white text-black hover:bg-zinc-200 font-bold text-sm transition-all shadow-xl hover:scale-[1.02] flex items-center justify-center gap-2"
+              className="w-full mt-6 py-4 rounded-xl bg-slate-900 text-white hover:bg-slate-800 font-bold text-sm transition-all shadow-lg hover:shadow-xl flex items-center justify-center gap-2 relative z-10"
             >
               Capture Next Lead
               <ChevronRight className="w-5 h-5" />
@@ -293,61 +474,199 @@ export default function CaptureDashboard() {
           </div>
         </div>
       ) : (
-        <main className="flex-1 w-full max-w-5xl mx-auto z-10 flex flex-col justify-center gap-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full">
-            
-            {/* LEFT COLUMN: Recording & Context */}
-            <div className="flex flex-col gap-6">
-              <RecordButton onRecordingComplete={handleRecordingComplete} isProcessing={audioProcessing} />
-              
-              {context && (
-                <div className="glass-panel p-6 rounded-3xl flex-1 animate-in fade-in slide-in-from-bottom-4 duration-500 border border-indigo-500/20 bg-indigo-950/10">
-                  <h4 className="text-xs font-bold text-indigo-400 uppercase tracking-widest mb-4 flex items-center gap-2">
-                    <ShieldCheck className="w-4 h-4" /> Meeting Context
-                  </h4>
-                  <div className="space-y-5">
-                    <div>
-                      <span className="text-xs text-zinc-500 block mb-1">Stated Need</span>
-                      <p className="text-sm text-zinc-200 leading-relaxed">{context.needs || 'No specific needs stated.'}</p>
+        <main className="flex-1 w-full max-w-6xl mx-auto z-10 flex flex-col justify-center gap-8 py-8 md:py-12">
+          
+          {/* Main Content Area - Beautiful Center Layout */}
+          <div className="flex flex-col items-center justify-center w-full min-h-[400px]">
+            {/* WIZARD STEPS */}
+            {(mode !== 'review' && mode !== 'bulk') && (
+              <div className="w-full max-w-xl animate-in fade-in zoom-in-95 duration-500">
+                {mode === 'card_choice' && (
+                  <div className="bg-white border border-slate-200 shadow-xl rounded-3xl p-8 md:p-12 text-center space-y-8 flex flex-col items-center">
+                    <div className="w-20 h-20 bg-blue-50 rounded-2xl flex items-center justify-center text-blue-600 mb-2 shadow-inner">
+                      <Sparkles className="w-10 h-10" />
                     </div>
-                    {context.notable_quotes?.length > 0 && (
-                      <div>
-                        <span className="text-xs text-zinc-500 block mb-1">Key Quote</span>
-                        <p className="text-sm text-indigo-200 italic border-l-2 border-indigo-500/50 pl-3">"{context.notable_quotes[0]}"</p>
+                    <div>
+                      <h2 className="text-2xl md:text-3xl font-black text-slate-900 tracking-tight mb-3">
+                        Step 1: Capture Contact Info
+                      </h2>
+                      <p className="text-slate-500">
+                        Scan a business card to instantly extract the contact details.
+                      </p>
+                    </div>
+                    <div className="w-full max-w-sm mx-auto flex flex-col gap-4">
+                      <button onClick={() => setMode('card')} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 rounded-xl shadow-lg transition-all">
+                        Scan Single Card
+                      </button>
+                      <button onClick={() => setMode('bulk')} className="w-full bg-slate-100 hover:bg-slate-200 text-slate-900 font-bold py-4 rounded-xl border border-slate-200 transition-all">
+                        Bulk Scan Multiple Cards
+                      </button>
+                    </div>
+                    <button onClick={() => setMode('notes')} className="text-sm font-bold text-slate-400 hover:text-slate-600 mt-4 underline decoration-slate-300 underline-offset-4 transition-colors">
+                      Skip for now, add notes later &rarr;
+                    </button>
+                  </div>
+                )}
+
+                {(mode === 'voice' || mode === 'notes') && (
+                  <div className="bg-white border border-slate-200 shadow-xl rounded-3xl p-8 md:p-12 text-center space-y-8 flex flex-col items-center">
+                    <div className="w-20 h-20 bg-blue-50 rounded-2xl flex items-center justify-center text-blue-600 mb-2 shadow-inner">
+                      <Sparkles className="w-10 h-10" />
+                    </div>
+                    <div>
+                      <h2 className="text-2xl md:text-3xl font-black text-slate-900 tracking-tight mb-3">
+                        {mode === 'voice' ? 'Step 3: Record Conversation' : 'Step 2: Scan Meeting Notes'}
+                      </h2>
+                      <p className="text-slate-500">
+                        {mode === 'voice' 
+                          ? 'Tap the microphone below and let the AI extract contact details and meeting context automatically.'
+                          : 'Upload a photo of your handwritten notes or business card scribbles.'}
+                      </p>
+                    </div>
+                    <div className="w-full max-w-sm mx-auto">
+                      {mode === 'voice' && <RecordButton onRecordingComplete={handleRecordingComplete} isProcessing={audioProcessing} />}
+                      {mode === 'notes' && <NotesScanner onScanComplete={handleNotesScanComplete} isProcessing={notesProcessing} leadId={leadId} />}
+                    </div>
+                    <button 
+                      onClick={() => setMode(mode === 'notes' ? 'voice' : 'review')} 
+                      className="text-sm font-bold text-slate-400 hover:text-slate-600 mt-8 underline decoration-slate-300 underline-offset-4 transition-colors"
+                    >
+                      {mode === 'notes' ? 'Skip & proceed to Voice Recording \u2192' : 'Skip & Review \u2192'}
+                    </button>
+                  </div>
+                )}
+                
+                {mode === 'card' && (
+                  <div className="bg-white border border-slate-200 shadow-xl rounded-3xl overflow-hidden">
+                    <CardScanner onScanComplete={handleScanComplete} isProcessing={cardProcessing} />
+                  </div>
+                )}
+              </div>
+            )}
+
+            {mode === 'bulk' && (
+              <div className="w-full max-w-xl animate-in fade-in zoom-in-95 duration-500">
+                <div className="bg-white border border-slate-200 shadow-xl rounded-3xl overflow-hidden">
+                  <BulkCardScanner onImagesSelected={handleBulkImagesSelected} isProcessing={false} />
+                </div>
+              </div>
+            )}
+
+            {/* BULK PROCESSING STATE */}
+            {mode === 'bulk' && verificationQueue.length > 0 && (
+              <div className="w-full max-w-xl animate-in fade-in zoom-in-95 duration-500">
+                <div className="flex flex-col gap-6 mt-6">
+                  <div className="space-y-6">
+                    {isBulkAutoSaving ? (
+                      <div className="bg-white border border-slate-200 shadow-sm rounded-3xl p-8 text-center space-y-4">
+                        <Loader2 className="w-12 h-12 text-blue-600 animate-spin mx-auto mb-4" />
+                        <h3 className="text-xl font-bold text-slate-900">Auto-Saving Leads</h3>
+                        <p className="text-slate-500">Processing {bulkProgress.processed} of {bulkProgress.total} cards...</p>
+                        <div className="w-full bg-slate-100 rounded-full h-2.5 mt-4 overflow-hidden">
+                          <div className="bg-blue-600 h-2.5 rounded-full transition-all duration-500" style={{ width: `${(bulkProgress.processed / bulkProgress.total) * 100}%` }}></div>
+                        </div>
+                        <div className="flex justify-center gap-4 mt-4 font-semibold text-sm">
+                          <span className="text-emerald-600 bg-emerald-50 px-3 py-1 rounded-full">{bulkProgress.successes} Success</span>
+                          <span className="text-red-600 bg-red-50 px-3 py-1 rounded-full">{bulkProgress.failures} Failed</span>
+                        </div>
+                      </div>
+                    ) : queueIndex === -1 ? (
+                      <div className="bg-white border border-slate-200 shadow-sm rounded-3xl p-8 text-center space-y-6">
+                        <div className="w-20 h-20 rounded-full bg-blue-50 flex items-center justify-center mx-auto shadow-inner">
+                          <Sparkles className="w-10 h-10 text-blue-600" />
+                        </div>
+                        <div>
+                          <h3 className="text-2xl font-black text-slate-900 tracking-tight mb-2">{verificationQueue.length} Cards Captured</h3>
+                          <p className="text-slate-500 font-medium">How would you like to process these cards?</p>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
+                          <button onClick={startManualReview} className="bg-white hover:bg-slate-50 text-slate-900 p-4 rounded-xl font-bold transition-all border-2 border-slate-200 hover:border-slate-300">
+                            Review Manually
+                          </button>
+                          <button onClick={startAutoSaveAll} className="bg-blue-600 hover:bg-blue-700 text-white p-4 rounded-xl font-bold transition-all shadow-md shadow-blue-600/20">
+                            Auto-save All
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="bg-white border border-slate-200 rounded-3xl p-8 text-center space-y-4 shadow-sm">
+                        <p className="text-sm font-bold text-slate-500 uppercase tracking-widest">Reviewing card {queueIndex + 1} of {verificationQueue.length}</p>
+                        {cardProcessing && <Loader2 className="w-10 h-10 text-blue-600 animate-spin mx-auto" />}
                       </div>
                     )}
                   </div>
                 </div>
-              )}
-            </div>
+              </div>
+            )}
 
-            {/* RIGHT COLUMN: Scanning & Profile */}
-            <div className="flex flex-col gap-6">
-              <CardScanner onScanComplete={handleScanComplete} isProcessing={cardProcessing} />
-              
-              {extractedFields && (
-                <div className="glass-panel p-6 rounded-3xl flex-1 animate-in fade-in slide-in-from-bottom-4 duration-500 border border-teal-500/20 bg-teal-950/10 relative group cursor-pointer" onClick={() => setShowFieldsModal(true)}>
-                  <div className="absolute top-4 right-4 text-[10px] uppercase font-bold text-teal-500 bg-teal-500/10 px-2 py-1 rounded border border-teal-500/20 opacity-0 group-hover:opacity-100 transition-opacity">Edit</div>
-                  <h4 className="text-xs font-bold text-teal-400 uppercase tracking-widest mb-4 flex items-center gap-2">
-                    <User className="w-4 h-4" /> Contact Profile
-                  </h4>
-                  <div className="space-y-4">
-                    <div>
-                      <h2 className="text-2xl font-bold text-white">{extractedFields.name || 'Unknown Name'}</h2>
-                      <p className="text-sm text-teal-200">{extractedFields.title} @ {extractedFields.company}</p>
+            {/* REVIEW MODE (FINAL STEP) */}
+            {mode === 'review' && (context || extractedFields) && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full animate-in fade-in slide-in-from-bottom-8 duration-500">
+                {/* LEFT COLUMN: Context */}
+                <div className="flex flex-col gap-6">
+                  {context ? (
+                    <div className="bg-white border border-slate-200 shadow-sm rounded-3xl p-6 md:p-8 flex-1 relative overflow-hidden group hover:border-blue-200 transition-colors">
+                      <div className="absolute top-0 left-0 w-1 h-full bg-blue-600 rounded-l-3xl"></div>
+                      <h4 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-6 flex items-center gap-2">
+                        <ShieldCheck className="w-4 h-4 text-blue-600" /> Meeting Context
+                      </h4>
+                      <div className="space-y-6">
+                        <div>
+                          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Stated Need</span>
+                          <p className="text-base text-slate-800 leading-relaxed font-medium">{context.needs || 'No specific needs stated.'}</p>
+                        </div>
+                        {context.notable_quotes?.length > 0 && (
+                          <div>
+                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-2">Key Quote</span>
+                            <p className="text-lg text-slate-600 italic border-l-4 border-blue-200 pl-4 bg-blue-50/50 py-3 rounded-r-xl">"{context.notable_quotes[0]}"</p>
+                          </div>
+                        )}
+                      </div>
                     </div>
-                    <div className="pt-4 border-t border-white/5 space-y-2">
-                      <p className="text-sm text-zinc-300 flex justify-between">
-                        <span className="text-zinc-500">Email</span> {extractedFields.email || '--'}
-                      </p>
-                      <p className="text-sm text-zinc-300 flex justify-between">
-                        <span className="text-zinc-500">Phone</span> {extractedFields.phone || '--'}
-                      </p>
+                  ) : (
+                    <div className="bg-slate-50 border border-slate-200 border-dashed rounded-3xl p-6 md:p-8 flex-1 flex flex-col items-center justify-center text-center text-slate-400">
+                      <p className="text-sm font-medium">No notes or voice recorded</p>
                     </div>
-                  </div>
+                  )}
                 </div>
-              )}
-            </div>
+
+                {/* RIGHT COLUMN: Contact Profile */}
+                <div className="flex flex-col gap-6">
+                  {extractedFields ? (
+                    <div 
+                      className="bg-white border border-slate-200 shadow-sm rounded-3xl p-6 md:p-8 flex-1 relative group cursor-pointer hover:border-teal-200 hover:shadow-md transition-all" 
+                      onClick={() => setShowFieldsModal(true)}
+                    >
+                      <div className="absolute top-0 left-0 w-1 h-full bg-teal-500 rounded-l-3xl"></div>
+                      <div className="absolute top-4 right-4 text-[10px] uppercase font-bold text-teal-600 bg-teal-50 px-3 py-1 rounded-full border border-teal-200 opacity-0 group-hover:opacity-100 transition-opacity">Edit Profile</div>
+                      <h4 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-6 flex items-center gap-2">
+                        <User className="w-4 h-4 text-teal-600" /> Contact Profile
+                      </h4>
+                      <div className="space-y-6">
+                        <div>
+                          <h2 className="text-3xl font-black text-slate-900 tracking-tight">{extractedFields.name || 'Unknown Name'}</h2>
+                          <p className="text-base font-medium text-teal-600 mt-1">{extractedFields.title} <span className="text-slate-400 mx-1">at</span> {extractedFields.company}</p>
+                        </div>
+                        <div className="pt-6 border-t border-slate-100 space-y-3">
+                          <div className="flex justify-between items-center bg-slate-50 p-3 rounded-xl">
+                            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Email</span> 
+                            <span className="text-sm font-semibold text-slate-700">{extractedFields.email || '--'}</span>
+                          </div>
+                          <div className="flex justify-between items-center bg-slate-50 p-3 rounded-xl">
+                            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Phone</span> 
+                            <span className="text-sm font-semibold text-slate-700">{extractedFields.phone || '--'}</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="bg-slate-50 border border-slate-200 border-dashed rounded-3xl p-6 md:p-8 flex-1 flex flex-col items-center justify-center text-center text-slate-400">
+                      <p className="text-sm font-medium">No contact card scanned</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Floating Action Bar */}
@@ -363,7 +682,7 @@ export default function CaptureDashboard() {
                 <button
                   onClick={handleGenerateDraft}
                   disabled={isDrafting}
-                  className="w-full py-5 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-lg shadow-2xl transition-all duration-300 flex items-center justify-center gap-3 neon-glow-primary hover:scale-[1.01] border border-indigo-400/30"
+                  className="w-full py-5 rounded-2xl bg-blue-600 hover:bg-slate-800 text-slate-900 font-bold text-lg shadow-2xl transition-all duration-300 flex items-center justify-center gap-3 shadow-sm hover:scale-[1.01] border border-indigo-400/30"
                 >
                   {isDrafting ? (
                     <>
@@ -382,14 +701,14 @@ export default function CaptureDashboard() {
               <button
                 onClick={handleSaveDraft}
                 disabled={isSaving}
-                className="w-full py-4 rounded-2xl bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 text-zinc-300 font-semibold text-sm transition-all duration-300 flex items-center justify-center gap-2"
+                className="w-full py-4 rounded-2xl bg-slate-50 border border-slate-200 hover:bg-slate-100 text-slate-700 font-semibold text-sm transition-all duration-300 flex items-center justify-center gap-2"
               >
                 {isSaving ? (
                   <div className="w-4 h-4 border-2 border-zinc-500 border-t-transparent rounded-full animate-spin"></div>
                 ) : (
                   <Save className="w-4 h-4" />
                 )}
-                {isSaving ? 'Saving...' : 'Save to Drafts & Exit'}
+                {isSaving ? 'Saving...' : 'Save & Exit'}
               </button>
             </div>
           )}
@@ -398,17 +717,24 @@ export default function CaptureDashboard() {
 
       {/* Modals */}
       {showFieldsModal && extractedFields && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-300">
-          <ExtractedFieldsForm
-            initialFields={extractedFields}
-            onConfirm={handleConfirmFields}
-            onCancel={() => setShowFieldsModal(false)}
-          />
+        <div className="fixed inset-0 z-50 bg-white/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-300">
+          <div className="w-full max-w-lg bg-white border border-slate-200 rounded-3xl shadow-2xl p-6">
+            {verificationQueue.length > 0 && queueIndex >= 0 && extractedFields?.image && (
+              <div className="bg-slate-50/50 rounded-xl p-2 border border-slate-200 mb-6">
+                <img src={extractedFields.image} alt="Card preview" className="w-full max-h-48 object-contain rounded-lg" />
+              </div>
+            )}
+            <ExtractedFieldsForm
+              initialFields={extractedFields}
+              onConfirm={handleConfirmFields}
+              onCancel={() => setShowFieldsModal(false)}
+            />
+          </div>
         </div>
       )}
 
       {emailDraft && leadId && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-300">
+        <div className="fixed inset-0 z-50 bg-white/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-300">
           <FollowupDraftEditor
             leadId={leadId}
             initialDraft={emailDraft}
@@ -418,5 +744,17 @@ export default function CaptureDashboard() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function CaptureDashboard() {
+  return (
+    <React.Suspense fallback={
+      <div className="min-h-screen bg-white flex justify-center items-center">
+        <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+      </div>
+    }>
+      <CaptureDashboardContent />
+    </React.Suspense>
   );
 }

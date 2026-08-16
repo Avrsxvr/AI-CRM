@@ -5,12 +5,9 @@ export class EmailService {
    * Initializes and returns the Nodemailer Gmail transporter.
    * Returns null if credentials are not configured, triggering console fallback.
    */
-  private static getTransporter() {
-    const user = process.env.GMAIL_USER;
-    const pass = process.env.GMAIL_APP_PASSWORD;
-
+  private static getTransporter(user?: string, pass?: string) {
     if (!user || !pass) {
-      console.warn('GMAIL_USER or GMAIL_APP_PASSWORD is missing. Email service is running in Console Log fallback mode.');
+      console.warn('Email credentials missing. Email service is running in Console Log fallback mode.');
       return null;
     }
 
@@ -27,16 +24,18 @@ export class EmailService {
    * Sends an email using Nodemailer via Gmail SMTP, or mocks the output to the console if unconfigured.
    */
   public static async sendEmail(
+    credentials: { user?: string; pass?: string; fromName?: string },
     to: string, 
     subject: string, 
     body: string, 
     leadId?: string, 
     touchPosition?: number,
-    appUrl?: string
+    appUrl?: string,
+    attachments?: { filename: string; content: string; encoding: string }[]
   ): Promise<string> {
-    const transporter = this.getTransporter();
-    const fromAddress = process.env.GMAIL_USER || 'test@gmail.com';
-    const fromName = process.env.EMAIL_FROM_NAME || 'Sales Team';
+    const transporter = this.getTransporter(credentials.user, credentials.pass);
+    const fromAddress = credentials.user || 'test@gmail.com';
+    const fromName = credentials.fromName || 'Sales Team';
 
     // Format plain text breaks to HTML breaks
     let htmlBody = body.replace(/\n/g, '<br />');
@@ -71,6 +70,7 @@ ${htmlBody}
         to: to,
         subject: subject,
         html: htmlBody,
+        attachments: attachments || [],
       });
 
       return info.messageId || 'nodemailer-success-id';

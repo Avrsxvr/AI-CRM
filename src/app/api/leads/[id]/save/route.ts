@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { LeadsRepository } from '@/lib/repositories/leads';
+import { CampaignsRepository } from '@/lib/repositories/campaigns';
 import { supabaseAdmin } from '@/lib/supabase';
+import { createClient } from '@/utils/supabase/server';
 
 export async function POST(
   req: NextRequest,
@@ -9,11 +11,17 @@ export async function POST(
   try {
     const { id } = await params;
     const body = await req.json();
-    const { contactFields, cardImage, confidence } = body;
+    const { contactFields, cardImage, confidence, campaignId, exhibition, stall } = body;
+    const supabase = await createClient();
+
+    // 0. Update event tracking (E1 S1 feature)
+    if (exhibition || stall) {
+      await LeadsRepository.updateEventTracking(supabase, id, exhibition || null, stall || null);
+    }
 
     // 1. Update contact fields if provided
     if (contactFields) {
-      await LeadsRepository.updateContactFields(id, contactFields, 'confirmed');
+      await LeadsRepository.updateContactFields(supabase, id, contactFields, 'confirmed');
     }
 
     // 2. Associate card scan if a new business card image is uploaded
@@ -57,11 +65,21 @@ export async function POST(
 
       // Save to database card_scans table
       await LeadsRepository.associateCardScan(
+        supabase,
         id,
         imageUrl,
         contactFields || {},
         typeof confidence === 'number' ? confidence : 1.0
       );
+    }
+
+    // Link with campaign if provided
+    if (campaignId) {
+      try {
+        await CampaignsRepository.addLeadToCampaign(supabase, campaignId, id);
+      } catch (clError: any) {
+        console.error(`Failed to link lead ${id} to campaign ${campaignId} during save:`, clError.message);
+      }
     }
 
     return NextResponse.json({

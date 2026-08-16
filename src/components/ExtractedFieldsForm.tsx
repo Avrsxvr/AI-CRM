@@ -75,13 +75,13 @@ export default function ExtractedFieldsForm({
   };
 
   return (
-    <div className="glass-panel p-6 rounded-2xl w-full max-w-md mx-auto transition-all duration-300">
+    <div className="bg-white border border-slate-200 shadow-sm rounded-xl p-6 rounded-2xl w-full max-w-md mx-auto transition-all duration-300">
       <div className="flex flex-col gap-1.5 mb-6">
         <div className="flex items-center justify-between">
-          <h3 className="text-lg font-semibold text-zinc-100">Confirm Lead Details</h3>
+          <h3 className="text-lg font-semibold text-slate-900">Confirm Lead Details</h3>
           {getConfidenceBadge(fields.confidence)}
         </div>
-        <p className="text-xs text-zinc-400">
+        <p className="text-xs text-slate-500">
           Review the contact details extracted from the business card and make any necessary corrections.
         </p>
       </div>
@@ -89,8 +89,8 @@ export default function ExtractedFieldsForm({
       <form onSubmit={handleSubmit} className="space-y-4">
         {/* Full Name */}
         <div className="space-y-1.5">
-          <label htmlFor="name" className="text-xs font-medium text-zinc-400 flex items-center gap-1.5">
-            <User className="w-3.5 h-3.5 text-indigo-400" />
+          <label htmlFor="name" className="text-xs font-medium text-slate-500 flex items-center gap-1.5">
+            <User className="w-3.5 h-3.5 text-slate-600" />
             Full Name
           </label>
           <input
@@ -101,14 +101,14 @@ export default function ExtractedFieldsForm({
             onChange={handleChange}
             placeholder="John Doe"
             required
-            className="w-full bg-black/50 border border-white/5 focus:border-indigo-500/50 focus:ring-1 focus:ring-indigo-500/20 rounded-xl px-4 py-3 text-sm text-zinc-100 placeholder-zinc-600 transition-all outline-none shadow-inner"
+            className="w-full bg-white/50 border border-slate-200 focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/20 rounded-xl px-4 py-3 text-sm text-slate-900 placeholder-zinc-600 transition-all outline-none shadow-inner"
           />
         </div>
 
         {/* Company Name */}
         <div className="space-y-1.5">
-          <label htmlFor="company" className="text-xs font-medium text-zinc-400 flex items-center gap-1.5">
-            <Building className="w-3.5 h-3.5 text-indigo-400" />
+          <label htmlFor="company" className="text-xs font-medium text-slate-500 flex items-center gap-1.5">
+            <Building className="w-3.5 h-3.5 text-slate-600" />
             Company Name
           </label>
           <input
@@ -118,14 +118,14 @@ export default function ExtractedFieldsForm({
             value={fields.company || ''}
             onChange={handleChange}
             placeholder="Acme Corporation"
-            className="w-full bg-black/50 border border-white/5 focus:border-indigo-500/50 focus:ring-1 focus:ring-indigo-500/20 rounded-xl px-4 py-3 text-sm text-zinc-100 placeholder-zinc-600 transition-all outline-none shadow-inner"
+            className="w-full bg-white/50 border border-slate-200 focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/20 rounded-xl px-4 py-3 text-sm text-slate-900 placeholder-zinc-600 transition-all outline-none shadow-inner"
           />
         </div>
 
         {/* Job Title */}
         <div className="space-y-1.5">
-          <label htmlFor="title" className="text-xs font-medium text-zinc-400 flex items-center gap-1.5">
-            <Award className="w-3.5 h-3.5 text-indigo-400" />
+          <label htmlFor="title" className="text-xs font-medium text-slate-500 flex items-center gap-1.5">
+            <Award className="w-3.5 h-3.5 text-slate-600" />
             Job Title
           </label>
           <input
@@ -135,14 +135,14 @@ export default function ExtractedFieldsForm({
             value={fields.title || ''}
             onChange={handleChange}
             placeholder="Managing Director"
-            className="w-full bg-black/50 border border-white/5 focus:border-indigo-500/50 focus:ring-1 focus:ring-indigo-500/20 rounded-xl px-4 py-3 text-sm text-zinc-100 placeholder-zinc-600 transition-all outline-none shadow-inner"
+            className="w-full bg-white/50 border border-slate-200 focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/20 rounded-xl px-4 py-3 text-sm text-slate-900 placeholder-zinc-600 transition-all outline-none shadow-inner"
           />
         </div>
 
         {/* Email Address */}
         <div className="space-y-1.5">
-          <label htmlFor="email" className="text-xs font-medium text-zinc-400 flex items-center gap-1.5">
-            <Mail className="w-3.5 h-3.5 text-indigo-400" />
+          <label htmlFor="email" className="text-xs font-medium text-slate-500 flex items-center gap-1.5">
+            <Mail className="w-3.5 h-3.5 text-slate-600" />
             Email Address
           </label>
           <input
@@ -153,14 +153,14 @@ export default function ExtractedFieldsForm({
             onChange={handleChange}
             placeholder="john@example.com"
             required
-            className="w-full bg-black/50 border border-white/5 focus:border-indigo-500/50 focus:ring-1 focus:ring-indigo-500/20 rounded-xl px-4 py-3 text-sm text-zinc-100 placeholder-zinc-600 transition-all outline-none shadow-inner"
+            className="w-full bg-white/50 border border-slate-200 focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/20 rounded-xl px-4 py-3 text-sm text-slate-900 placeholder-zinc-600 transition-all outline-none shadow-inner"
           />
         </div>
 
         {/* Phone Number */}
         <div className="space-y-1.5">
-          <label htmlFor="phone" className="text-xs font-medium text-zinc-400 flex items-center gap-1.5">
-            <Phone className="w-3.5 h-3.5 text-indigo-400" />
+          <label htmlFor="phone" className="text-xs font-medium text-slate-500 flex items-center gap-1.5">
+            <Phone className="w-3.5 h-3.5 text-slate-600" />
             Phone Number
           </label>
           <input
@@ -170,7 +170,7 @@ export default function ExtractedFieldsForm({
             value={fields.phone || ''}
             onChange={handleChange}
             placeholder="+1 555-0199"
-            className="w-full bg-black/50 border border-white/5 focus:border-indigo-500/50 focus:ring-1 focus:ring-indigo-500/20 rounded-xl px-4 py-3 text-sm text-zinc-100 placeholder-zinc-600 transition-all outline-none shadow-inner"
+            className="w-full bg-white/50 border border-slate-200 focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/20 rounded-xl px-4 py-3 text-sm text-slate-900 placeholder-zinc-600 transition-all outline-none shadow-inner"
           />
         </div>
 
@@ -180,14 +180,14 @@ export default function ExtractedFieldsForm({
             type="button"
             onClick={onCancel}
             disabled={isSubmitting}
-            className="flex-1 py-2.5 px-4 rounded-xl border border-zinc-800 text-sm font-medium text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900 transition-all"
+            className="flex-1 py-2.5 px-4 rounded-xl border border-slate-200 text-sm font-medium text-slate-500 hover:text-zinc-200 hover:bg-slate-50 transition-all"
           >
             Cancel
           </button>
           <button
             type="submit"
             disabled={isSubmitting}
-            className="flex-1 py-2.5 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-sm font-medium text-white flex items-center justify-center gap-1.5 neon-glow-primary hover:scale-[1.01] transition-all"
+            className="flex-1 py-2.5 px-4 rounded-xl bg-blue-600 hover:bg-slate-800 text-sm font-medium text-slate-900 flex items-center justify-center gap-1.5 shadow-sm hover:scale-[1.01] transition-all"
           >
             {isSubmitting ? (
               <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>

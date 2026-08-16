@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { LeadsRepository } from '@/lib/repositories/leads';
 import { ZohoService } from '@/lib/services/zoho';
+import { createClient } from '@/utils/supabase/server';
 import { SheetsService } from '@/lib/services/sheets';
 import { SchedulerAgent } from '@/lib/agents/scheduler';
 import { EmailService } from '@/lib/services/email';
+import { SettingsService } from '@/lib/services/settings';
 
 export async function POST(
   req: NextRequest,
@@ -12,7 +14,7 @@ export async function POST(
   try {
     const { id } = await params;
     const body = await req.json();
-    const { subject, body: emailBody } = body;
+    const { subject, body: emailBody, attachments } = body;
 
     if (!subject || !emailBody) {
       return NextResponse.json(
@@ -28,7 +30,8 @@ export async function POST(
     }
 
     // 1. Fetch the current lead details from the database
-    const lead = await LeadsRepository.getLeadById(id);
+    const supabase = await createClient();
+    const lead = await LeadsRepository.getLeadById(supabase, id);
     if (!lead) {
       return NextResponse.json(
         {
@@ -73,16 +76,29 @@ ${emailBody}
     let crmRecordId = '';
     let syncError: string | undefined = undefined;
 
-    // 2. Try Zoho CRM sync
+    // 2. Fetch Settings and Try Zoho CRM sync
+    const settings = await SettingsService.getSettings(lead.organization_id);
+
     try {
-      const zohoResult = await ZohoService.createLead(crmPayload);
+      if (!settings.zoho_client_id || !settings.zoho_client_secret || !settings.zoho_refresh_token) {
+        throw new Error("Zoho credentials missing in organization settings.");
+      }
+      const zohoCredentials = {
+        orgId: lead.organization_id,
+        clientId: settings.zoho_client_id,
+        clientSecret: settings.zoho_client_secret,
+        refreshToken: settings.zoho_refresh_token,
+        apiUrl: settings.zoho_api_url,
+        accountsUrl: settings.zoho_accounts_url
+      };
+      const zohoResult = await ZohoService.createLead(zohoCredentials, crmPayload);
       crmRecordId = zohoResult.crmRecordId;
       syncedTo = 'zoho';
-      await LeadsRepository.logCrmSyncAttempt(id, 'zoho', 'success');
+      await LeadsRepository.logCrmSyncAttempt(supabase, id, 'zoho', 'success');
     } catch (zohoError: any) {
       console.warn('Zoho CRM sync failed. Details:', zohoError);
       syncError = zohoError.message || String(zohoError);
-      await LeadsRepository.logCrmSyncAttempt(id, 'zoho', 'failed', syncError);
+      await LeadsRepository.logCrmSyncAttempt(supabase, id, 'zoho', 'failed', syncError);
       
       // 3. Fallback to Google Sheets
       try {
@@ -93,10 +109,11 @@ ${emailBody}
         const sheetResult = await SheetsService.appendLead(sheetPayload);
         crmRecordId = sheetResult.crmRecordId;
         syncedTo = 'sheets';
-        await LeadsRepository.logCrmSyncAttempt(id, 'sheets', 'success');
+        await LeadsRepository.logCrmSyncAttempt(supabase, id, 'sheets', 'success');
       } catch (sheetError: any) {
         console.error('Google Sheets fallback also failed. Details:', sheetError);
         await LeadsRepository.logCrmSyncAttempt(
+          supabase,
           id,
           'sheets',
           'failed',
@@ -108,7 +125,7 @@ ${emailBody}
     // 4. Update lead record and trigger scheduling on success
     if (syncedTo !== 'none') {
       // Mark lead as synced and record the sync location
-      await LeadsRepository.markAsSynced(id, crmRecordId);
+      await LeadsRepository.markAsSynced(supabase, id, crmRecordId);
 
       // Queue the follow-up sequences (1-hour follow-up + bi-weekly drip)
       try {
@@ -118,11 +135,16 @@ ${emailBody}
         const dynamicAppUrl = `${protocol}://${host}`;
 
         // Send the first email immediately instead of waiting for the cron job
-        await EmailService.sendEmail(contactFields.email || 'avrsmain@gmail.com', subject, emailBody, id, 1, dynamicAppUrl);
+        const emailCredentials = {
+          user: settings.email_user,
+          pass: settings.email_password,
+          fromName: settings.email_from_name
+        };
+        await EmailService.sendEmail(emailCredentials, contactFields.email || 'avrsmain@gmail.com', subject, emailBody, id, 1, dynamicAppUrl, attachments);
         
         // Queue the remaining bi-weekly drip sequence starting at touch 2
         await SchedulerAgent.scheduleSequence(id, { subject, body: emailBody });
-        await LeadsRepository.updateStatus(id, 'synced'); // Ensure status is correctly tracked
+        await LeadsRepository.updateStatus(supabase, id, 'synced'); // Ensure status is correctly tracked
       } catch (schedError) {
         console.error('Sequence scheduling failed:', schedError);
         // Do not fail the request if scheduling fails, but log it
@@ -138,7 +160,7 @@ ${emailBody}
       });
     } else {
       // Both channels failed, flag lead as needs manual review
-      await LeadsRepository.updateStatus(id, 'needs_attention');
+      await LeadsRepository.updateStatus(supabase, id, 'needs_attention');
       
       return NextResponse.json(
         {

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { CampaignsRepository } from '@/lib/repositories/campaigns';
+import { createClient } from '@/utils/supabase/server';
 
 export async function POST(
   req: NextRequest,
@@ -18,7 +19,8 @@ export async function POST(
       );
     }
 
-    await CampaignsRepository.addLeadToCampaign(campaignId, lead_id);
+    const supabase = await createClient();
+    await CampaignsRepository.addLeadToCampaign(supabase, campaignId, lead_id);
 
     return NextResponse.json({ data: { success: true }, error: null });
   } catch (error: any) {
@@ -48,7 +50,8 @@ export async function DELETE(
       );
     }
 
-    await CampaignsRepository.removeLeadFromCampaign(campaignId, leadId);
+    const supabase = await createClient();
+    await CampaignsRepository.removeLeadFromCampaign(supabase, campaignId, leadId);
 
     return NextResponse.json({ data: { success: true }, error: null });
   } catch (error: any) {

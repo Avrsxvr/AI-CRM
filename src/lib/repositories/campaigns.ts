@@ -1,4 +1,4 @@
-import { supabaseAdmin } from '@/lib/supabase';
+import { SupabaseClient } from '@supabase/supabase-js';
 
 export interface CampaignInsert {
   organization_id: string;
@@ -11,8 +11,8 @@ export class CampaignsRepository {
   /**
    * Creates a new campaign.
    */
-  public static async createCampaign(campaignData: CampaignInsert) {
-    const { data, error } = await supabaseAdmin
+  public static async createCampaign(supabase: SupabaseClient<any, "public", any>, campaignData: CampaignInsert) {
+    const { data, error } = await supabase
       .from('campaigns')
       .insert({
         organization_id: campaignData.organization_id,
@@ -24,31 +24,28 @@ export class CampaignsRepository {
       .select()
       .single();
 
-    if (error) {
-      throw new Error(`Database error creating campaign: ${error.message}`);
-    }
-
+    if (error) throw new Error(`Database error creating campaign: ${error.message}`);
     return data;
   }
 
   /**
    * Retrieves all campaigns for an organization, including lead counts.
    */
-  public static async getCampaigns(organizationId: string) {
+  public static async getCampaigns(supabase: SupabaseClient<any, "public", any>, organizationId: string) {
     // We can fetch campaigns and join on campaign_leads to get counts
-    const { data, error } = await supabaseAdmin
+    const { data, error } = await supabase
       .from('campaigns')
       .select(`
         *,
-        campaign_leads(count)
+        campaign_leads(
+          lead:leads(context_summary)
+        )
       `)
       .eq('organization_id', organizationId)
       .eq('status', 'active')
       .order('created_at', { ascending: false });
 
-    if (error) {
-      throw new Error(`Database error fetching campaigns: ${error.message}`);
-    }
+    if (error) throw new Error(`Database error fetching campaigns: ${error.message}`);
 
     // Map the Supabase count object to a flat number
     return data.map((campaign: any) => ({
@@ -61,32 +58,30 @@ export class CampaignsRepository {
   /**
    * Retrieves a single campaign with all its associated leads.
    */
-  public static async getCampaignById(campaignId: string) {
-    // 1. Get campaign details
-    const { data: campaign, error: campaignError } = await supabaseAdmin
-      .from('campaigns')
-      .select('*')
-      .eq('id', campaignId)
-      .single();
+  public static async getCampaignById(supabase: SupabaseClient<any, "public", any>, campaignId: string) {
+    // Execute campaign details and leads queries concurrently to improve speed
+    const [campaignRes, leadsRes] = await Promise.all([
+      supabase
+        .from('campaigns')
+        .select('*')
+        .eq('id', campaignId)
+        .single(),
+      supabase
+        .from('campaign_leads')
+        .select(`
+          lead_id,
+          added_at,
+          leads (*)
+        `)
+        .eq('campaign_id', campaignId)
+        .order('added_at', { ascending: false })
+    ]);
 
-    if (campaignError) {
-      throw new Error(`Database error fetching campaign: ${campaignError.message}`);
-    }
+    if (campaignRes.error) throw new Error(`Database error fetching campaign: ${campaignRes.error.message}`);
+    if (leadsRes.error) throw new Error(`Database error fetching campaign leads: ${leadsRes.error.message}`);
 
-    // 2. Get the leads in this campaign (Joining campaign_leads with leads)
-    const { data: leads, error: leadsError } = await supabaseAdmin
-      .from('campaign_leads')
-      .select(`
-        lead_id,
-        added_at,
-        leads (*)
-      `)
-      .eq('campaign_id', campaignId)
-      .order('added_at', { ascending: false });
-
-    if (leadsError) {
-      throw new Error(`Database error fetching campaign leads: ${leadsError.message}`);
-    }
+    const campaign = campaignRes.data;
+    const leads = leadsRes.data;
 
     return {
       ...campaign,
@@ -100,8 +95,8 @@ export class CampaignsRepository {
   /**
    * Adds a single lead to a campaign.
    */
-  public static async addLeadToCampaign(campaignId: string, leadId: string) {
-    const { data, error } = await supabaseAdmin
+  public static async addLeadToCampaign(supabase: SupabaseClient<any, "public", any>, campaignId: string, leadId: string) {
+    const { data, error } = await supabase
       .from('campaign_leads')
       .insert({
         campaign_id: campaignId,
@@ -124,30 +119,40 @@ export class CampaignsRepository {
   /**
    * Removes a single lead from a campaign.
    */
-  public static async removeLeadFromCampaign(campaignId: string, leadId: string) {
-    const { error } = await supabaseAdmin
+  public static async removeLeadFromCampaign(supabase: SupabaseClient<any, "public", any>, campaignId: string, leadId: string) {
+    const { error } = await supabase
       .from('campaign_leads')
       .delete()
       .match({ campaign_id: campaignId, lead_id: leadId });
 
-    if (error) {
-      throw new Error(`Database error removing lead from campaign: ${error.message}`);
-    }
+    if (error) throw new Error(`Database error removing lead from campaign: ${error.message}`);
     return true;
   }
 
   /**
    * Archives a campaign.
    */
-  public static async archiveCampaign(campaignId: string) {
-    const { error } = await supabaseAdmin
+  public static async archiveCampaign(supabase: SupabaseClient<any, "public", any>, campaignId: string) {
+    const { error } = await supabase
       .from('campaigns')
       .update({ status: 'archived' })
       .eq('id', campaignId);
 
-    if (error) {
-      throw new Error(`Database error archiving campaign: ${error.message}`);
-    }
+    if (error) throw new Error(`Database error archiving campaign: ${error.message}`);
     return true;
+  }
+  /**
+   * Updates a campaign.
+   */
+  public static async updateCampaign(supabase: SupabaseClient<any, "public", any>, campaignId: string, updates: any) {
+    const { data, error } = await supabase
+      .from('campaigns')
+      .update(updates)
+      .eq('id', campaignId)
+      .select()
+      .single();
+
+    if (error) throw new Error(`Database error updating campaign: ${error.message}`);
+    return data;
   }
 }

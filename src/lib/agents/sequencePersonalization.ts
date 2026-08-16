@@ -11,18 +11,24 @@ export class SequencePersonalizationAgent {
    * Generates a personalized drip sequence touch using Gemini Flash.
    */
   public static async personalizeTouch(
+    apiKey: string,
     leadDetails: { name?: string | null; company?: string | null; title?: string | null; context_summary?: any },
-    sequencePosition: number,
+    emailLevel: number,
+    subjectLevel: number,
     senderName: string = 'Sales Rep'
   ): Promise<SequencePersonalizationOutput> {
-    const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
-      throw new Error('Gemini API key (GEMINI_API_KEY) is missing in environment variables.');
+      throw new Error('Gemini API key is required but was not provided.');
     }
 
-    const template = DRIP_TEMPLATES.find(t => t.position === sequencePosition);
+    // Determine the template or dynamically fall back to a generative prompt if we exceed pre-written templates (Infinite Drip Engine)
+    let template = DRIP_TEMPLATES.find(t => t.position === emailLevel);
     if (!template) {
-      throw new Error(`No sequence template found for position: ${sequencePosition}`);
+      template = {
+        position: emailLevel,
+        subject: `[Dynamic Follow-up ${emailLevel}]`,
+        body: `Dear [Name] ji,\n\nI wanted to share another quick update regarding [Needs/Problem Topic] and how [Company] might benefit.\n\nBest,\n[Sender]`
+      };
     }
 
     const genAI = new GoogleGenerativeAI(apiKey);
@@ -58,14 +64,14 @@ export class SequencePersonalizationAgent {
       touch_instructions: `Adapt the following template:\nSubject: ${template.subject}\nBody:\n${template.body}`,
     }, null, 2);
 
-    const prompt = `Generate Touch ${sequencePosition} based on this lead data:\n\n${payload}`;
+    const prompt = `Generate Email Touch Level ${emailLevel} based on this lead data:\n\n${payload}\n\nIMPORTANT INSTRUCTION for Subject Variation Level ${subjectLevel}:\nIf Subject Variation Level is > 1, you MUST write a completely new, catchier subject line than the original template, because the user did NOT open the previous emails.`;
 
     try {
       const result = await model.generateContent(prompt);
       const text = result.response.text();
       return JSON.parse(text) as SequencePersonalizationOutput;
     } catch (error) {
-      console.error(`Error in Sequence Personalization Agent (Position ${sequencePosition}):`, error);
+      console.error(`Error in Sequence Personalization Agent (Email ${emailLevel} Subject ${subjectLevel}):`, error);
       return {
         subject: `Checking in - ${leadDetails.company || 'Update'}`,
         body: `Hi ${leadDetails.name || 'there'},\n\nI wanted to follow up and see how things are going at ${leadDetails.company || 'your company'}.\n\nBest regards,\n${senderName}`,

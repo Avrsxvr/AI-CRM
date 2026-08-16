@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { CardOcrAgent } from '@/lib/agents/cardOcr';
+import { getCurrentUserOrgId } from '@/lib/auth';
+import { SettingsService } from '@/lib/services/settings';
 
 export async function POST(req: NextRequest) {
   try {
@@ -28,8 +30,19 @@ export async function POST(req: NextRequest) {
       base64Data = matches[2];
     }
 
+    const orgId = await getCurrentUserOrgId();
+    if (!orgId) {
+      return NextResponse.json({ data: null, error: { code: 'UNAUTHORIZED', message: 'Unauthorized' } }, { status: 401 });
+    }
+
+    const settings = await SettingsService.getSettings(orgId);
+    const apiKey = settings.gemini_api_key;
+    if (!apiKey) {
+      return NextResponse.json({ data: null, error: { code: 'CONFIG_ERROR', message: 'Gemini API key missing' } }, { status: 400 });
+    }
+
     // Process card scan with Gemini Vision
-    const extractedFields = await CardOcrAgent.processCard(base64Data, mimeType);
+    const extractedFields = await CardOcrAgent.processCard(apiKey, base64Data, mimeType);
 
     return NextResponse.json({
       data: extractedFields,

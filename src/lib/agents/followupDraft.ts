@@ -11,13 +11,13 @@ export class FollowupDraftAgent {
    * Generates a highly personalized Touch 1 email based on extracted context.
    */
   public static async generateDraft(
+    apiKey: string,
     contactFields: { name?: string | null; company?: string | null; title?: string | null },
     contextSummary: { problem?: string | null; needs?: string | null; action_items?: string[]; notable_quotes?: string[] },
     senderName: string = 'Sales Rep'
   ): Promise<FollowupDraftOutput> {
-    const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
-      throw new Error('Gemini API key (GEMINI_API_KEY) is missing in environment variables.');
+      throw new Error('Gemini API key is required but was not provided.');
     }
 
     const genAI = new GoogleGenerativeAI(apiKey);

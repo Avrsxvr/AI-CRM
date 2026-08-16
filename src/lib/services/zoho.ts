@@ -9,33 +9,26 @@ interface ZohoLeadFields {
 }
 
 export class ZohoService {
-  private static accessToken: string | null = null;
-  private static tokenExpiry: number | null = null;
-
-  private static getAccountsUrl(): string {
-    return process.env.ZOHO_ACCOUNTS_URL || 'https://accounts.zoho.com';
-  }
-
-  private static getApiUrl(): string {
-    return process.env.ZOHO_API_URL || 'https://www.zohoapis.com';
-  }
+  private static tokenCache: Record<string, { accessToken: string; tokenExpiry: number }> = {};
 
   /**
    * Refreshes the Zoho access token if it is expired or not yet fetched.
    */
-  private static async refreshAccessToken(): Promise<string> {
+  private static async refreshAccessToken(
+    orgId: string,
+    clientId: string,
+    clientSecret: string,
+    refreshToken: string,
+    accountsUrl: string = 'https://accounts.zoho.com'
+  ): Promise<string> {
     const now = Date.now();
-    // Use cached token if it has more than 1 minute of validity remaining
-    if (this.accessToken && this.tokenExpiry && now < this.tokenExpiry - 60000) {
-      return this.accessToken!;
+    const cached = this.tokenCache[orgId];
+    if (cached && now < cached.tokenExpiry - 60000) {
+      return cached.accessToken;
     }
 
-    const clientId = process.env.ZOHO_CLIENT_ID;
-    const clientSecret = process.env.ZOHO_CLIENT_SECRET;
-    const refreshToken = process.env.ZOHO_REFRESH_TOKEN;
-
     if (!clientId || !clientSecret || !refreshToken) {
-      throw new Error('Zoho credentials ZOHO_CLIENT_ID, ZOHO_CLIENT_SECRET, or ZOHO_REFRESH_TOKEN are missing in environment.');
+      throw new Error('Zoho credentials clientId, clientSecret, or refreshToken are missing for this organization.');
     }
 
     const params = new URLSearchParams({
@@ -45,7 +38,7 @@ export class ZohoService {
       refresh_token: refreshToken,
     });
 
-    const tokenUrl = `${this.getAccountsUrl()}/oauth/v2/token?${params.toString()}`;
+    const tokenUrl = `${accountsUrl}/oauth/v2/token?${params.toString()}`;
 
     const response = await fetch(tokenUrl, {
       method: 'POST',
@@ -64,19 +57,29 @@ export class ZohoService {
       throw new Error(`Zoho token response did not contain access_token: ${JSON.stringify(data)}`);
     }
 
-    this.accessToken = data.access_token;
-    // expires_in is in seconds, convert to absolute ms timestamp
-    this.tokenExpiry = Date.now() + (data.expires_in * 1000);
+    this.tokenCache[orgId] = {
+      accessToken: data.access_token,
+      tokenExpiry: Date.now() + (data.expires_in * 1000)
+    };
 
-    return this.accessToken!;
+    return data.access_token;
   }
 
   /**
    * Creates a lead record in Zoho CRM.
    * Maps properties and ensures the mandatory Last_Name field is populated.
    */
-  public static async createLead(fields: ZohoLeadFields): Promise<{ crmRecordId: string }> {
-    const accessToken = await this.refreshAccessToken();
+  public static async createLead(
+    credentials: { orgId: string; clientId: string; clientSecret: string; refreshToken: string; apiUrl?: string; accountsUrl?: string },
+    fields: ZohoLeadFields
+  ): Promise<{ crmRecordId: string }> {
+    const accessToken = await this.refreshAccessToken(
+      credentials.orgId,
+      credentials.clientId,
+      credentials.clientSecret,
+      credentials.refreshToken,
+      credentials.accountsUrl
+    );
 
     // Zoho CRM requires Last_Name. If missing, attempt splitting or assign a fallback.
     let firstName = (fields.firstName || '').trim();
@@ -107,14 +110,14 @@ export class ZohoService {
       Description: fields.description || '',
     };
 
-    const apiUrl = `${this.getApiUrl()}/crm/v2/Leads`;
+    const apiUrl = credentials.apiUrl || 'https://www.zohoapis.com';
 
     let retries = 3;
     let delay = 1000;
 
     while (retries > 0) {
       try {
-        const response = await fetch(apiUrl, {
+        const response = await fetch(`${apiUrl}/crm/v3/Leads`, {
           method: 'POST',
           headers: {
             'Authorization': `Zoho-oauthtoken ${accessToken}`,
@@ -157,10 +160,46 @@ export class ZohoService {
   /**
    * Updates fields of an existing lead in Zoho CRM.
    */
-  public static async updateLead(crmRecordId: string, fields: any): Promise<boolean> {
+  public static async searchLeadByEmail(
+    credentials: { orgId: string; clientId: string; clientSecret: string; refreshToken: string; apiUrl?: string; accountsUrl?: string },
+    email: string
+  ): Promise<{ crmRecordId: string | null }> {
+    const accessToken = await this.refreshAccessToken(
+      credentials.orgId,
+      credentials.clientId,
+      credentials.clientSecret,
+      credentials.refreshToken,
+      credentials.accountsUrl
+    );
+
+    const apiUrl = credentials.apiUrl || 'https://www.zohoapis.com';
+    const params = new URLSearchParams({ email });
+    const response = await fetch(`${apiUrl}/crm/v3/Leads/search?${params.toString()}`, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Zoho-oauthtoken ${accessToken}`,
+      },
+    });
+
+    if (!response.ok) return { crmRecordId: null };
+    const data = await response.json();
+    return { crmRecordId: data.data?.[0]?.id || null };
+  }
+
+  public static async updateLead(
+    credentials: { orgId: string; clientId: string; clientSecret: string; refreshToken: string; apiUrl?: string; accountsUrl?: string },
+    crmRecordId: string, 
+    fields: any
+  ): Promise<boolean> {
     try {
-      const accessToken = await this.refreshAccessToken();
-      const apiUrl = `${this.getApiUrl()}/crm/v2/Leads/${crmRecordId}`;
+      const accessToken = await this.refreshAccessToken(
+        credentials.orgId,
+        credentials.clientId,
+        credentials.clientSecret,
+        credentials.refreshToken,
+        credentials.accountsUrl
+      );
+      const apiUrl = (credentials.apiUrl || 'https://www.zohoapis.com') + `/crm/v3/Leads/${crmRecordId}`;
 
       const response = await fetch(apiUrl, {
         method: 'PUT',
@@ -186,10 +225,21 @@ export class ZohoService {
   /**
    * Adds a Note timeline entry under a Lead in Zoho CRM.
    */
-  public static async addNote(crmRecordId: string, title: string, content: string): Promise<boolean> {
+  public static async addNote(
+    credentials: { orgId: string; clientId: string; clientSecret: string; refreshToken: string; apiUrl?: string; accountsUrl?: string },
+    crmRecordId: string, 
+    title: string, 
+    content: string
+  ): Promise<boolean> {
     try {
-      const accessToken = await this.refreshAccessToken();
-      const apiUrl = `${this.getApiUrl()}/crm/v2/Notes`;
+      const accessToken = await this.refreshAccessToken(
+        credentials.orgId,
+        credentials.clientId,
+        credentials.clientSecret,
+        credentials.refreshToken,
+        credentials.accountsUrl
+      );
+      const apiUrl = (credentials.apiUrl || 'https://www.zohoapis.com') + '/crm/v3/Notes';
 
       const noteData = {
         Note_Title: title,
@@ -218,4 +268,5 @@ export class ZohoService {
       return false;
     }
   }
+
 }

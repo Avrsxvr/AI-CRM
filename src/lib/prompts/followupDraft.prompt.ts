@@ -7,7 +7,9 @@ Rules:
 3. Avoid generic sales buzzwords, corporate jargon, or overly formal phrases (e.g., "pleased to meet you", "synergies", "cutting-edge solutions").
 4. Write in a warm, direct, and conversational tone, as if a human representative typed it out quickly.
 5. Refer directly to the specific problem they mentioned, the needs they expressed, and any action items/promises made (e.g., "I will send over the pricing template as promised").
-6. The output must consist of two sections: Subject and Body. Format it clearly as:
+6. You MUST always start the email greeting exactly as: "Dear [Name] ji," (e.g., "Dear John ji,").
+7. You MUST write a subject line that is short and catchy (maximum 6 words).
+8. The output must consist of two sections: Subject and Body. Format it clearly as:
 Subject: [Your Subject Line]
 ---
 Body:

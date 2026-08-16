@@ -4,7 +4,7 @@ import { supabaseAdmin } from '@/lib/supabase';
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { organizationId, userId } = body;
+    const { organizationId, userId, campaignId } = body;
 
     if (!organizationId) {
       return NextResponse.json(
@@ -34,6 +34,20 @@ export async function POST(req: NextRequest) {
 
     if (error) {
       throw new Error(`Failed to initialize lead in database: ${error.message}`);
+    }
+
+    // Associate with campaign if provided
+    if (campaignId) {
+      const { error: clError } = await supabaseAdmin
+        .from('campaign_leads')
+        .insert({
+          campaign_id: campaignId,
+          lead_id: lead.id,
+        });
+
+      if (clError) {
+        console.error(`Failed to associate lead ${lead.id} with campaign ${campaignId}:`, clError.message);
+      }
     }
 
     return NextResponse.json({

@@ -6,6 +6,7 @@ import { ZohoService } from '@/lib/services/zoho';
 import { SheetsService } from '@/lib/services/sheets';
 import { SchedulerAgent } from '@/lib/agents/scheduler';
 import { LeadsRepository } from '@/lib/repositories/leads';
+import { SettingsService } from '@/lib/services/settings';
 
 // Define the shared graph state using Annotation API
 export const LeadCaptureStateAnnotation = Annotation.Root({
@@ -22,9 +23,23 @@ export const LeadCaptureStateAnnotation = Annotation.Root({
   crmRecordId: Annotation<string | null>(),
   syncSystem: Annotation<'zoho' | 'sheets' | 'none' | null>(),
   errorMessage: Annotation<string | null>(),
+  settings: Annotation<any | null>(),
 });
 
 export type LeadCaptureState = typeof LeadCaptureStateAnnotation.State;
+
+// Node 0: Fetch Organization Settings
+async function fetchSettingsNode(state: LeadCaptureState) {
+  if (!state.organizationId) {
+    return { errorMessage: 'Organization ID is missing' };
+  }
+  try {
+    const settings = await SettingsService.getSettings(state.organizationId);
+    return { settings };
+  } catch (error: any) {
+    return { errorMessage: `Failed to fetch settings: ${error.message}` };
+  }
+}
 
 // Node 1: Transcribe audio and extract conversation context
 async function transcribeAndExtractNode(state: LeadCaptureState) {
@@ -32,9 +47,12 @@ async function transcribeAndExtractNode(state: LeadCaptureState) {
     return { errorMessage: 'Audio buffer or MIME type is missing' };
   }
 
+  const apiKey = state.settings?.gemini_api_key;
+  if (!apiKey) return { errorMessage: 'Gemini API key is missing in organization settings.' };
+
   try {
     const audioBase64 = state.audioBuffer.toString('base64');
-    const context = await ContextExtractionAgent.extractContext(audioBase64, state.audioMimeType);
+    const context = await ContextExtractionAgent.extractContext(apiKey, audioBase64, state.audioMimeType);
     
     return {
       transcript: context.transcript,
@@ -51,8 +69,11 @@ async function ocrCardNode(state: LeadCaptureState) {
     return { errorMessage: 'Card image data is missing' };
   }
 
+  const apiKey = state.settings?.gemini_api_key;
+  if (!apiKey) return { errorMessage: 'Gemini API key is missing in organization settings.' };
+
   try {
-    const ocrResult = await CardOcrAgent.processCard(state.cardImageBase64, 'image/jpeg');
+    const ocrResult = await CardOcrAgent.processCard(apiKey, state.cardImageBase64, 'image/jpeg');
     return {
       contactFields: {
         name: ocrResult.name,
@@ -73,8 +94,12 @@ async function generateFollowupNode(state: LeadCaptureState) {
     return { errorMessage: 'Cannot generate draft: contact fields or context missing' };
   }
 
+  const apiKey = state.settings?.gemini_api_key;
+  if (!apiKey) return { errorMessage: 'Gemini API key is missing in organization settings.' };
+
   try {
     const draft = await FollowupDraftAgent.generateDraft(
+      apiKey,
       {
         name: state.contactFields.name,
         company: state.contactFields.company,
@@ -125,12 +150,24 @@ ${state.emailDraft.body}
   };
 
   try {
-    // Attempt Zoho
-    const zohoResult = await ZohoService.createLead(crmPayload);
-    return {
-      crmRecordId: zohoResult.crmRecordId,
-      syncSystem: 'zoho' as const,
-    };
+    // Attempt Zoho if credentials exist
+    if (state.settings?.zoho_client_id && state.settings?.zoho_client_secret && state.settings?.zoho_refresh_token) {
+      const zohoCredentials = {
+        orgId: state.organizationId,
+        clientId: state.settings.zoho_client_id,
+        clientSecret: state.settings.zoho_client_secret,
+        refreshToken: state.settings.zoho_refresh_token,
+        apiUrl: state.settings.zoho_api_url,
+        accountsUrl: state.settings.zoho_accounts_url
+      };
+      const zohoResult = await ZohoService.createLead(zohoCredentials, crmPayload);
+      return {
+        crmRecordId: zohoResult.crmRecordId,
+        syncSystem: 'zoho' as const,
+      };
+    } else {
+      throw new Error("Zoho credentials missing in settings.");
+    }
   } catch (zohoError: any) {
     console.warn('LangGraph: Zoho Sync Node failed, attempting Sheets fallback.', zohoError);
     
@@ -175,6 +212,7 @@ async function scheduleDripsNode(state: LeadCaptureState) {
 
 // Build the LangGraph State Graph
 const workflow = new StateGraph(LeadCaptureStateAnnotation)
+  .addNode('fetchSettings', fetchSettingsNode)
   .addNode('transcribeAndExtract', transcribeAndExtractNode)
   .addNode('ocrCard', ocrCardNode)
   .addNode('generateFollowup', generateFollowupNode)
@@ -182,8 +220,9 @@ const workflow = new StateGraph(LeadCaptureStateAnnotation)
   .addNode('scheduleDrips', scheduleDripsNode);
 
 // Define edges and transitions
-workflow.addEdge('__start__', 'transcribeAndExtract');
-workflow.addEdge('__start__', 'ocrCard');
+workflow.addEdge('__start__', 'fetchSettings');
+workflow.addEdge('fetchSettings', 'transcribeAndExtract');
+workflow.addEdge('fetchSettings', 'ocrCard');
 
 // Both OCR and Transcription branches converge on follow-up generation
 workflow.addEdge('transcribeAndExtract', 'generateFollowup');

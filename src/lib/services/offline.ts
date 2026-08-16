@@ -13,6 +13,9 @@ export interface OfflineLead {
   audioBase64?: string | null;
   audioMimeType?: string | null;
   cardImageBase64?: string | null;
+  campaignId?: string | null;
+  exhibition?: string | null;
+  stall?: string | null;
 }
 
 export class OfflineStorage {
@@ -87,7 +90,11 @@ export async function syncOfflineLead(offlineLead: OfflineLead): Promise<boolean
     const startRes = await fetch('/api/leads/recording/start', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ organizationId: mockOrgId, userId: null }),
+      body: JSON.stringify({ 
+        organizationId: mockOrgId, 
+        userId: null,
+        campaignId: offlineLead.campaignId || null
+      }),
     });
     
     if (!startRes.ok) throw new Error('Cloud DB initialization failed.');
@@ -123,6 +130,7 @@ export async function syncOfflineLead(offlineLead: OfflineLead): Promise<boolean
         contactFields: offlineLead.contactFields,
         cardImage: offlineLead.cardImageBase64 || null,
         confidence: offlineLead.cardImageBase64 ? 0.95 : 1.0,
+        campaignId: offlineLead.campaignId || null
       }),
     });
 

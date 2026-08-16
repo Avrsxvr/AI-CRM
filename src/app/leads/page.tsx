@@ -1,9 +1,11 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import LeadList from '@/components/LeadList';
 import LeadDetailPanel from '@/components/LeadDetailPanel';
+import LeadFormModal from '@/components/LeadFormModal';
 import {
+  Target,
   Sparkles,
   Users,
   RefreshCw,
@@ -13,8 +15,13 @@ import {
   UserPlus,
   LayoutDashboard,
   Clock,
+  Download,
+  Trash2,
+  Plus
 } from 'lucide-react';
 import Link from 'next/link';
+import { motion, AnimatePresence } from 'framer-motion';
+import { useToast } from '@/components/Toast';
 
 export default function LeadsDashboard() {
   const [leads, setLeads] = useState<any[]>([]);
@@ -24,6 +31,55 @@ export default function LeadsDashboard() {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [offlineQueueLength, setOfflineQueueLength] = useState(0);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [isFormOpen, setIsFormOpen] = useState(false);
+  const [editingLead, setEditingLead] = useState<any | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const { addToast } = useToast();
+
+  const exportToCSV = () => {
+    if (filteredLeads.length === 0) return;
+    const headers = ['Name', 'Company', 'Title', 'Email', 'Phone', 'Exhibition', 'Stall', 'Status', 'Sentiment', 'Opens', 'Captured At'];
+    const rows = filteredLeads.map(lead => {
+      const c = lead.contact_fields || {};
+      const ctx = lead.context_summary || {};
+      return [
+        c.name || '', c.company || '', c.title || '', c.email || '', c.phone || '',
+        lead.exhibition || '', lead.stall || '', lead.status || '',
+        ctx.sentiment || '', ctx.open_count || 0,
+        new Date(lead.created_at).toLocaleDateString(),
+      ].map(v => `"${String(v).replace(/"/g, '""')}"`).join(',');
+    });
+    const csv = [headers.join(','), ...rows].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `crm-leads-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    addToast('success', `Exported ${filteredLeads.length} leads`, 'CSV file downloaded successfully.');
+  };
+
+  // Animated count hook
+  const useAnimatedCount = (target: number, duration = 800) => {
+    const [count, setCount] = useState(0);
+    const prevTarget = useRef(0);
+    useEffect(() => {
+      if (target === prevTarget.current) return;
+      prevTarget.current = target;
+      const start = Date.now();
+      const tick = () => {
+        const elapsed = Date.now() - start;
+        const progress = Math.min(elapsed / duration, 1);
+        const ease = 1 - Math.pow(1 - progress, 3);
+        setCount(Math.round(ease * target));
+        if (progress < 1) requestAnimationFrame(tick);
+      };
+      requestAnimationFrame(tick);
+    }, [target, duration]);
+    return count;
+  };
 
   interface Activity {
     id: string;
@@ -35,9 +91,9 @@ export default function LeadsDashboard() {
     details: string;
   }
 
-  const getActivities = (leadsList: any[]): Activity[] => {
+  const activities = React.useMemo(() => {
     const list: Activity[] = [];
-    leadsList.forEach((lead) => {
+    leads.forEach((lead) => {
       const contact = lead.contact_fields || {};
       const name = contact.name || 'Unnamed Prospect';
       const company = contact.company || 'Unknown Company';
@@ -98,13 +154,20 @@ export default function LeadsDashboard() {
 
       const context = lead.context_summary || {};
       if (context.open_count > 0) {
+        // Try to find the earliest open timestamp from followups
+        const followups = lead.followups || [];
+        const openedFollowup = followups.find((f: any) => f.opened_at);
+        const openTime = openedFollowup?.opened_at 
+          ? new Date(openedFollowup.opened_at).toISOString() 
+          : new Date(new Date(lead.created_at).getTime() + 10 * 60 * 1000).toISOString(); // fallback
+
         list.push({
           id: `${lead.id}-open`,
           leadId: lead.id,
           leadName: name,
           company,
           type: 'open',
-          timestamp: new Date(new Date(lead.created_at).getTime() + 10 * 60 * 1000).toISOString(),
+          timestamp: openTime,
           details: `Follow-up email opened (${context.open_count} views)`
         });
       }
@@ -113,7 +176,7 @@ export default function LeadsDashboard() {
     return list
       .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
       .slice(0, 10);
-  };
+  }, [leads]);
 
   const fetchLeads = async () => {
     setIsLoading(true);
@@ -137,8 +200,82 @@ export default function LeadsDashboard() {
     }
   };
 
+  const handleToggleSelection = (id: string) => {
+    setSelectedIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
+  };
+
+  const handleToggleAll = () => {
+    if (selectedIds.length === filteredLeads.length && filteredLeads.length > 0) {
+      setSelectedIds([]);
+    } else {
+      setSelectedIds(filteredLeads.map(l => l.id));
+    }
+  };
+
+  const handleSaveLead = async (payload: any) => {
+    try {
+      const url = '/api/leads';
+      const method = payload.id ? 'PUT' : 'POST';
+      const response = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      if (!response.ok) throw new Error('Failed to save lead');
+      
+      addToast('success', payload.id ? 'Lead updated' : 'Lead created');
+      fetchLeads();
+      if (selectedLead && payload.id === selectedLead.id) {
+        setSelectedLead(null); // Reset selection or refetch single lead
+      }
+    } catch (err: any) {
+      addToast('error', err.message);
+      throw err;
+    }
+  };
+
+  const handleDeleteLead = async (lead: any) => {
+    if (!confirm('Are you sure you want to delete this lead?')) return;
+    try {
+      const response = await fetch('/api/leads', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: [lead.id] })
+      });
+      if (!response.ok) throw new Error('Failed to delete lead');
+      
+      addToast('success', 'Lead deleted');
+      setSelectedIds(prev => prev.filter(id => id !== lead.id));
+      fetchLeads();
+    } catch (err: any) {
+      addToast('error', err.message);
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    if (!confirm(`Are you sure you want to delete ${selectedIds.length} leads?`)) return;
+    setIsDeleting(true);
+    try {
+      const response = await fetch('/api/leads', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: selectedIds })
+      });
+      if (!response.ok) throw new Error('Failed to delete leads');
+      
+      addToast('success', `${selectedIds.length} leads deleted`);
+      setSelectedIds([]);
+      fetchLeads();
+    } catch (err: any) {
+      addToast('error', err.message);
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
   useEffect(() => {
     fetchLeads();
+    setSearchQuery(''); // BUG 6 FIX: Reset search when filter tab changes
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [statusFilter]);
 
@@ -164,57 +301,72 @@ export default function LeadsDashboard() {
     };
   }, []);
 
-  const sentimentCounts = leads.reduce((acc: any, lead) => {
-    const sentiment = lead.context_summary?.sentiment || 'neutral';
-    acc[sentiment] = (acc[sentiment] || 0) + 1;
-    return acc;
-  }, { positive: 0, neutral: 0, skeptical: 0, critical: 0 });
+  const sentimentCounts = React.useMemo(() => {
+    return leads.reduce((acc: any, lead) => {
+      const sentiment = lead.context_summary?.sentiment || 'neutral';
+      acc[sentiment] = (acc[sentiment] || 0) + 1;
+      return acc;
+    }, { positive: 0, neutral: 0, skeptical: 0, critical: 0 });
+  }, [leads]);
 
   const totalLeads = leads.length;
-  const syncedCount = leads.filter((l) => l.status === 'synced').length;
-  const alertCount = leads.filter((l) => l.status === 'needs_attention').length;
+  const syncedCount = React.useMemo(() => leads.filter((l) => l.status === 'synced').length, [leads]);
+  const alertCount = React.useMemo(() => leads.filter((l) => l.status === 'needs_attention').length, [leads]);
+  const hotCount = React.useMemo(() => leads.filter((l) => l.context_summary?.is_hot === true).length, [leads]);
 
-  const filteredLeads = leads.filter((lead) => {
-    const contact = lead.contact_fields || {};
-    const name = (contact.name || '').toLowerCase();
-    const company = (contact.company || '').toLowerCase();
-    const query = searchQuery.toLowerCase();
-    return name.includes(query) || company.includes(query);
-  });
+  const animTotalLeads = useAnimatedCount(isLoading ? 0 : totalLeads);
+  const animSyncedCount = useAnimatedCount(isLoading ? 0 : syncedCount);
+  const animAlertCount = useAnimatedCount(isLoading ? 0 : alertCount);
+  const animHotCount = useAnimatedCount(isLoading ? 0 : hotCount);
+
+  const filteredLeads = React.useMemo(() => {
+    let list = leads;
+    if (statusFilter === 'hot') list = leads.filter(l => l.context_summary?.is_hot === true);
+    return list.filter((lead) => {
+      const contact = lead.contact_fields || {};
+      const name = (contact.name || '').toLowerCase();
+      const company = (contact.company || '').toLowerCase();
+      const query = searchQuery.toLowerCase();
+      return name.includes(query) || company.includes(query);
+    });
+  }, [leads, searchQuery, statusFilter]);
 
   return (
-    <div className="min-h-screen bg-black text-zinc-100 flex flex-col font-sans relative overflow-hidden">
+    <div className="min-h-screen flex flex-col relative overflow-hidden">
       {/* Background gradients */}
-      <div className="absolute top-0 right-1/4 w-96 h-96 bg-indigo-600/10 rounded-full blur-[120px] pointer-events-none"></div>
+      <div className="absolute top-0 right-1/4 w-96 h-96 bg-blue-600/10 rounded-full blur-[120px] pointer-events-none"></div>
       <div className="absolute bottom-1/4 left-1/4 w-96 h-96 bg-teal-600/10 rounded-full blur-[100px] pointer-events-none"></div>
 
       {/* Navigation */}
-      <nav className="border-b border-white/5 bg-black/60 backdrop-blur-xl sticky top-0 z-40">
+      <nav className="border-b border-slate-200 bg-white/60 backdrop-blur-xl sticky top-0 z-40">
         <div className="max-w-7xl mx-auto px-4 md:px-8 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-indigo-600/20 border border-indigo-500/30 flex items-center justify-center neon-glow-primary">
-              <Sparkles className="w-5 h-5 text-indigo-400" />
-            </div>
-            <div>
-              <span className="font-bold text-white tracking-wide block leading-none mb-1 text-sm sm:text-base">AI CRM Hub</span>
-              <span className="text-[10px] text-zinc-500 font-mono tracking-widest uppercase hidden sm:block">Exhibition Edition</span>
+          <div className="flex items-center">
+            <div className="w-36 h-7 flex items-center justify-start">
+              <img src="/logo.png?v=2" alt="Apexora Logo" className="w-full h-full object-contain object-left" />
             </div>
           </div>
 
           <div className="flex items-center gap-2 sm:gap-4">
             <Link
               href="/campaigns"
-              className="py-2 px-3 sm:py-2.5 sm:px-5 rounded-xl border border-white/10 text-zinc-300 hover:text-white hover:bg-white/5 font-bold text-xs sm:text-sm flex items-center gap-1.5 sm:gap-2 transition-all"
+              className="py-2 px-3 sm:py-2.5 sm:px-5 rounded-xl border border-slate-200 text-slate-700 hover:text-slate-900 hover:bg-slate-50 font-bold text-xs sm:text-sm flex items-center gap-1.5 sm:gap-2 transition-all"
             >
               <LayoutDashboard className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
               <span className="hidden sm:inline">Campaigns</span>
             </Link>
             <button
               onClick={fetchLeads}
-              className="p-2 sm:p-2.5 rounded-xl border border-white/10 hover:bg-white/5 text-zinc-400 hover:text-white transition-all group"
+              className="p-2 sm:p-2.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-500 hover:text-slate-900 transition-all group"
               title="Refresh Data"
             >
-              <RefreshCw className={`w-3.5 h-3.5 sm:w-4 sm:h-4 group-hover:text-indigo-400 transition-colors ${isLoading ? 'animate-spin text-indigo-400' : ''}`} />
+              <RefreshCw className={`w-3.5 h-3.5 sm:w-4 sm:h-4 group-hover:text-slate-600 transition-colors ${isLoading ? 'animate-spin text-slate-600' : ''}`} />
+            </button>
+            <button
+              onClick={() => { setEditingLead(null); setIsFormOpen(true); }}
+              className="p-2 sm:p-2.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-500 hover:text-slate-900 transition-all group"
+              title="Add Lead Manually"
+            >
+              <Plus className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
             </button>
             <Link
               href="/capture"
@@ -233,78 +385,84 @@ export default function LeadsDashboard() {
         {/* Header Section */}
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-bold text-white tracking-tight flex items-center gap-3">
-              <LayoutDashboard className="w-7 h-7 text-indigo-500" />
+            <h1 className="text-3xl font-bold text-slate-900 tracking-tight flex items-center gap-3">
+              <LayoutDashboard className="w-7 h-7 text-slate-800" />
               Campaign Overview
             </h1>
-            <p className="text-sm text-zinc-400 mt-2">Monitor all lead processing, extraction status, and automated CRM syncs.</p>
+            <p className="text-sm text-slate-500 mt-2">Monitor all lead processing, extraction status, and automated CRM syncs.</p>
           </div>
           
           {/* Status Tabs */}
-          <div className="flex gap-1 bg-white/5 p-1 rounded-xl border border-white/5 overflow-x-auto max-w-full backdrop-blur-md whitespace-nowrap scrollbar-none">
-            {['all', 'synced', 'needs_attention', 'capturing'].map((tab) => (
+          <div className="flex gap-1 bg-white/5 p-1 rounded-xl border border-slate-200 overflow-x-auto max-w-full backdrop-blur-md whitespace-nowrap scrollbar-none">
+            {['all', 'synced', 'needs_attention', 'hot', 'capturing'].map((tab) => (
               <button
                 key={tab}
                 onClick={() => setStatusFilter(tab)}
-                className={`px-2.5 py-1.5 sm:px-4 sm:py-2 rounded-lg sm:rounded-xl text-[10px] sm:text-xs font-bold uppercase tracking-wider transition-all flex-shrink-0 ${
+                className={`px-2.5 py-1.5 sm:px-4 sm:py-2 rounded-lg sm:rounded-xl text-[10px] sm:text-xs font-bold uppercase tracking-wider transition-all flex-shrink-0 flex items-center gap-1 ${
                   statusFilter === tab
                     ? 'bg-white text-black shadow-md'
-                    : 'text-zinc-500 hover:text-zinc-300 hover:bg-white/5'
+                    : 'text-slate-400 hover:text-slate-700 hover:bg-slate-50'
                 }`}
               >
-                {tab === 'needs_attention' ? 'Alerts' : tab}
+                {tab === 'hot' && '🔥'}
+                {tab === 'needs_attention' ? 'Alerts' : tab === 'hot' ? `Hot (${hotCount})` : tab}
               </button>
             ))}
           </div>
         </div>
 
         {/* Metrics Banner */}
-        <div className="grid grid-cols-3 gap-2 md:gap-6">
-          <div className="glass-panel p-3 md:p-6 rounded-2xl md:rounded-3xl flex flex-col md:flex-row items-center gap-2 md:gap-5 border border-indigo-500/10 bg-indigo-950/10 group hover:border-indigo-500/30 transition-all">
-            <div className="w-10 h-10 md:w-14 md:h-14 rounded-xl md:rounded-2xl bg-indigo-500/20 text-indigo-400 flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform neon-glow-primary">
-              <Users className="w-5 h-5 md:w-6 md:h-6" />
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, delay: 0.1 }}
+          className="grid grid-cols-3 gap-2 md:gap-6"
+        >
+          <div className="bg-white border border-slate-200 shadow-sm rounded-2xl p-4 md:p-6 flex flex-col md:flex-row items-center gap-3 md:gap-5 group hover:shadow-md hover:border-blue-200 transition-all cursor-default">
+            <div className="w-12 h-12 md:w-14 md:h-14 rounded-xl bg-blue-600 text-white flex items-center justify-center flex-shrink-0 shadow-sm group-hover:scale-105 transition-transform">
+              <Users className="w-6 h-6" />
             </div>
-            <div className="space-y-0.5 md:space-y-1 text-center md:text-left">
-              <span className="text-[9px] md:text-xs text-indigo-300 font-bold uppercase tracking-widest opacity-80 block">
-                Total<span className="hidden sm:inline"> Leads</span>
+            <div className="space-y-1 text-center md:text-left">
+              <span className="text-[10px] md:text-xs text-slate-500 font-bold uppercase tracking-wider block">
+                Total Leads
               </span>
-              <p className="text-lg md:text-3xl font-black text-white leading-none">{totalLeads}</p>
+              <div className="text-2xl md:text-3xl font-black text-slate-900 leading-none">{isLoading ? <span className="animate-pulse text-slate-300">...</span> : animTotalLeads}</div>
             </div>
           </div>
 
-          <div className="glass-panel p-3 md:p-6 rounded-2xl md:rounded-3xl flex flex-col md:flex-row items-center gap-2 md:gap-5 border border-teal-500/10 bg-teal-950/10 group hover:border-teal-500/30 transition-all">
-            <div className="w-10 h-10 md:w-14 md:h-14 rounded-xl md:rounded-2xl bg-teal-500/20 text-teal-400 flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform neon-glow-secondary">
-              <CheckCircle className="w-5 h-5 md:w-6 md:h-6" />
+          <div className="bg-white border border-slate-200 shadow-sm rounded-2xl p-4 md:p-6 flex flex-col md:flex-row items-center gap-3 md:gap-5 group hover:shadow-md hover:border-teal-200 transition-all cursor-default">
+            <div className="w-12 h-12 md:w-14 md:h-14 rounded-xl bg-teal-500 text-white flex items-center justify-center flex-shrink-0 shadow-sm group-hover:scale-105 transition-transform">
+              <CheckCircle className="w-6 h-6" />
             </div>
-            <div className="space-y-0.5 md:space-y-1 text-center md:text-left">
-              <span className="text-[9px] md:text-xs text-teal-300 font-bold uppercase tracking-widest opacity-80 block">
-                Synced<span className="hidden sm:inline"> CRM</span>
+            <div className="space-y-1 text-center md:text-left">
+              <span className="text-[10px] md:text-xs text-slate-500 font-bold uppercase tracking-wider block">
+                Synced CRM
               </span>
-              <p className="text-lg md:text-3xl font-black text-white leading-none">{syncedCount}</p>
+              <div className="text-2xl md:text-3xl font-black text-slate-900 leading-none">{isLoading ? <span className="animate-pulse text-slate-300">...</span> : animSyncedCount}</div>
             </div>
           </div>
 
-          <div className="glass-panel p-3 md:p-6 rounded-2xl md:rounded-3xl flex flex-col md:flex-row items-center gap-2 md:gap-5 border border-red-500/10 bg-red-950/10 group hover:border-red-500/30 transition-all">
-            <div className="w-10 h-10 md:w-14 md:h-14 rounded-xl md:rounded-2xl bg-red-500/20 text-red-400 flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform neon-glow-accent">
-              <AlertTriangle className="w-5 h-5 md:w-6 md:h-6" />
+          <div className="bg-white border border-slate-200 shadow-sm rounded-2xl p-4 md:p-6 flex flex-col md:flex-row items-center gap-3 md:gap-5 group hover:shadow-md hover:border-rose-200 transition-all cursor-default">
+            <div className="w-12 h-12 md:w-14 md:h-14 rounded-xl bg-rose-500 text-white flex items-center justify-center flex-shrink-0 shadow-sm group-hover:scale-105 transition-transform">
+              <AlertTriangle className="w-6 h-6" />
             </div>
-            <div className="space-y-0.5 md:space-y-1 text-center md:text-left">
-              <span className="text-[9px] md:text-xs text-red-300 font-bold uppercase tracking-widest opacity-80 block">
+            <div className="space-y-1 text-center md:text-left">
+              <span className="text-[10px] md:text-xs text-slate-500 font-bold uppercase tracking-wider block">
                 Alerts
               </span>
-              <p className="text-lg md:text-3xl font-black text-white leading-none">{alertCount}</p>
+              <div className="text-2xl md:text-3xl font-black text-slate-900 leading-none">{isLoading ? <span className="animate-pulse text-slate-300">...</span> : animAlertCount}</div>
             </div>
           </div>
-        </div>
+        </motion.div>
 
         {/* Offline Sync Alert */}
         {offlineQueueLength > 0 && (
-          <div className="p-4 bg-indigo-950/40 border border-indigo-500/30 text-indigo-200 rounded-3xl text-sm flex items-center justify-between animate-pulse">
+          <div className="p-4 bg-indigo-950/40 border border-blue-500/30 text-indigo-200 rounded-3xl text-sm flex items-center justify-between animate-pulse">
             <div className="flex items-center gap-2">
-              <span className="w-2.5 h-2.5 rounded-full bg-indigo-500 animate-ping"></span>
+              <span className="w-2.5 h-2.5 rounded-full bg-slate-800 animate-ping"></span>
               <span className="font-semibold">Sync Queue: {offlineQueueLength} lead(s) cached locally waiting for connection.</span>
             </div>
-            <span className="text-[10px] text-indigo-400 font-bold uppercase tracking-wider">Syncing in background</span>
+            <span className="text-[10px] text-slate-600 font-bold uppercase tracking-wider">Syncing in background</span>
           </div>
         )}
 
@@ -313,30 +471,58 @@ export default function LeadsDashboard() {
           
           {/* Main Leads List Area (3/4 Width) */}
           <div className="lg:col-span-3 space-y-6">
-            {/* Search */}
-            <div className="relative w-full glass-panel rounded-2xl border-white/10 group focus-within:border-indigo-500/50 transition-colors">
-              <Search className="w-5 h-5 text-zinc-500 absolute left-4 top-1/2 -translate-y-1/2 group-focus-within:text-indigo-400 transition-colors" />
-              <input
-                type="text"
-                placeholder="Search leads by name, company, or email..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full bg-transparent border-none rounded-2xl pl-12 pr-6 py-4 text-sm text-white placeholder-zinc-600 focus:ring-0 outline-none"
-              />
-            </div>
+            {/* Search + Export */}
+            <div className="flex gap-3 items-center">
+              <div className="relative flex-1 bg-white border border-slate-200 shadow-sm rounded-xl rounded-2xl border-slate-200 group focus-within:border-blue-500/50 transition-colors">
+                <Search className="w-5 h-5 text-slate-400 absolute left-4 top-1/2 -translate-y-1/2 group-focus-within:text-slate-600 transition-colors" />
+                <input
+                  type="text"
+                  placeholder="Search leads by name, company, or email..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full bg-transparent border-none rounded-2xl pl-12 pr-6 py-4 text-sm text-slate-900 placeholder-zinc-600 focus:ring-0 outline-none"
+                />
+              </div>
+                <button
+                  onClick={exportToCSV}
+                  disabled={filteredLeads.length === 0}
+                  title="Export to CSV"
+                  className="p-3.5 rounded-2xl bg-white border border-slate-200 shadow-sm rounded-xl border border-slate-200 hover:border-teal-500/30 text-slate-500 hover:text-teal-400 transition-all disabled:opacity-40"
+                >
+                  <Download className="w-5 h-5" />
+                </button>
+                {selectedIds.length > 0 && (
+                  <button
+                    onClick={handleBulkDelete}
+                    disabled={isDeleting}
+                    className="flex items-center gap-2 px-4 py-3.5 rounded-2xl bg-red-50 border border-red-200 text-red-600 font-bold text-sm shadow-sm hover:bg-red-100 transition-all disabled:opacity-50"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                    <span className="hidden sm:inline">Delete ({selectedIds.length})</span>
+                  </button>
+                )}
+              </div>
+
 
             {/* Leads List */}
             {isLoading && leads.length === 0 ? (
-              <div className="py-24 text-center glass-panel rounded-3xl border border-white/5">
-                <div className="w-10 h-10 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-                <p className="text-sm font-medium text-zinc-400">Loading your AI-processed leads...</p>
+              <div className="flex justify-center py-20">
+                <RefreshCw className="w-8 h-8 text-blue-600 animate-spin" />
               </div>
             ) : error ? (
               <div className="p-6 bg-red-950/20 border border-red-500/20 text-red-400 rounded-3xl text-sm font-medium text-center">
                 {error}
               </div>
             ) : (
-              <LeadList leads={filteredLeads} onSelectLead={setSelectedLead} />
+              <LeadList 
+                leads={filteredLeads} 
+                onSelectLead={setSelectedLead} 
+                selectedIds={selectedIds}
+                onToggleSelection={handleToggleSelection}
+                onToggleAll={handleToggleAll}
+                onEditLead={(lead) => { setEditingLead(lead); setIsFormOpen(true); }}
+                onDeleteLead={handleDeleteLead}
+              />
             )}
           </div>
 
@@ -344,9 +530,9 @@ export default function LeadsDashboard() {
           <div className="lg:col-span-1 space-y-6">
             
             {/* Sentiment Breakdown */}
-            <div className="glass-panel p-6 rounded-3xl border border-white/5 space-y-4">
-              <h4 className="text-xs font-bold text-zinc-400 uppercase tracking-widest flex items-center gap-2">
-                <Sparkles className="w-4 h-4 text-indigo-400" />
+            <div className="bg-white border border-slate-200 shadow-sm rounded-xl p-6 rounded-3xl border border-slate-200 space-y-4">
+              <h4 className="text-xs font-bold text-slate-500 uppercase tracking-widest flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-slate-600" />
                 Sentiment Breakdown
               </h4>
               <div className="space-y-3.5">
@@ -361,8 +547,8 @@ export default function LeadsDashboard() {
                   return (
                     <div key={s.key} className="space-y-1">
                       <div className="flex justify-between text-xs">
-                        <span className="text-zinc-400 font-medium">{s.name}</span>
-                        <span className="text-zinc-500 font-mono">{count} ({percent}%)</span>
+                        <span className="text-slate-500 font-medium">{s.name}</span>
+                        <span className="text-slate-400 font-mono">{count} ({percent}%)</span>
                       </div>
                       <div className={`w-full h-1.5 rounded-full ${s.barColor} overflow-hidden`}>
                         <div className={`h-full rounded-full ${s.color}`} style={{ width: `${percent}%` }}></div>
@@ -374,33 +560,33 @@ export default function LeadsDashboard() {
             </div>
 
             {/* Live Activity Log */}
-            <div className="glass-panel p-6 rounded-3xl border border-white/5 space-y-4">
-              <h4 className="text-xs font-bold text-zinc-400 uppercase tracking-widest flex items-center gap-2">
-                <Clock className="w-4 h-4 text-indigo-400" />
+            <div className="bg-white border border-slate-200 shadow-sm rounded-xl p-6 rounded-3xl border border-slate-200 space-y-4">
+              <h4 className="text-xs font-bold text-slate-500 uppercase tracking-widest flex items-center gap-2">
+                <Clock className="w-4 h-4 text-slate-600" />
                 Live Activity Log
               </h4>
               <div className="space-y-4 max-h-[380px] overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-zinc-800">
-                {getActivities(leads).length === 0 ? (
+                {activities.length === 0 ? (
                   <p className="text-xs text-zinc-600 text-center italic select-none py-8">
                     No recent activities recorded.
                   </p>
                 ) : (
-                  getActivities(leads).map((act) => (
-                    <div key={act.id} className="relative pl-4 border-l border-zinc-800 text-[11px] space-y-0.5">
+                  activities.map((act) => (
+                    <div key={act.id} className="relative pl-4 border-l border-slate-200 text-[11px] space-y-0.5">
                       {/* Event dot */}
                       <span className={`absolute -left-[4.5px] top-1 w-2 h-2 rounded-full ${
-                        act.type === 'capture' ? 'bg-indigo-500' :
+                        act.type === 'capture' ? 'bg-slate-800' :
                         act.type === 'ocr' ? 'bg-teal-500' :
                         act.type === 'voice' ? 'bg-purple-500' :
                         act.type === 'sync' ? 'bg-emerald-500' : 'bg-rose-500 animate-pulse'
                       }`}></span>
-                      <div className="flex justify-between text-zinc-300">
+                      <div className="flex justify-between text-slate-700">
                         <span className="font-semibold">{act.leadName}</span>
-                        <span className="text-[9px] text-zinc-500 font-mono">
+                        <span className="text-[9px] text-slate-400 font-mono">
                           {new Date(act.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                         </span>
                       </div>
-                      <p className="text-[10px] text-zinc-500">{act.details} @ {act.company}</p>
+                      <p className="text-[10px] text-slate-400">{act.details} @ {act.company}</p>
                     </div>
                   ))
                 )}
@@ -419,6 +605,13 @@ export default function LeadsDashboard() {
           onRefresh={fetchLeads}
         />
       )}
+      {/* Lead Form Modal */}
+      <LeadFormModal 
+        isOpen={isFormOpen} 
+        onClose={() => { setIsFormOpen(false); setEditingLead(null); }} 
+        onSave={handleSaveLead}
+        initialData={editingLead}
+      />
     </div>
   );
 }

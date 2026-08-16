@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { LeadsRepository } from '@/lib/repositories/leads';
 import { FollowupDraftAgent } from '@/lib/agents/followupDraft';
+import { createClient } from '@/utils/supabase/server';
+import { SettingsService } from '@/lib/services/settings';
 
 export async function POST(
   req: NextRequest,
@@ -25,7 +27,8 @@ export async function POST(
     }
 
     // 1. Update the contact fields in the database
-    const updatedLead = await LeadsRepository.updateContactFields(id, contactFields, 'confirmed');
+    const supabase = await createClient();
+    const updatedLead = await LeadsRepository.updateContactFields(supabase, id, contactFields, 'confirmed');
 
     // 2. Extract conversation context from database lead record
     const context = updatedLead.context_summary || {};
@@ -36,7 +39,13 @@ export async function POST(
       notable_quotes: context.notable_quotes || [],
     };
 
-    // 3. Generate Follow-up Draft
+    // 3. Fetch Settings and Generate Follow-up Draft
+    const settings = await SettingsService.getSettings(updatedLead.organization_id);
+    const apiKey = settings.gemini_api_key;
+    if (!apiKey) {
+      throw new Error("Gemini API key missing in organization settings.");
+    }
+
     const emailDetails = {
       name: contactFields.name || null,
       company: contactFields.company || null,
@@ -44,6 +53,7 @@ export async function POST(
     };
 
     const draft = await FollowupDraftAgent.generateDraft(
+      apiKey,
       emailDetails,
       contextDetails,
       senderName || 'Sales Representative'

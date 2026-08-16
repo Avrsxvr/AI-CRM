@@ -37,3 +37,42 @@ export async function DELETE(
     );
   }
 }
+
+export async function PATCH(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params;
+    const body = await req.json();
+
+    // Allow patching safe fields: notes, status, etc.
+    const allowedFields: Record<string, any> = {};
+    if (body.notes !== undefined) allowedFields.notes = body.notes;
+    if (body.status !== undefined) allowedFields.status = body.status;
+
+    if (Object.keys(allowedFields).length === 0) {
+      return NextResponse.json({ data: null, error: { code: 'NO_FIELDS', message: 'No valid fields provided to update.' } }, { status: 400 });
+    }
+
+
+
+    const { error } = await supabaseAdmin
+      .from('leads')
+      .update(allowedFields)
+      .eq('id', id);
+
+    if (error) {
+      throw new Error(`Database error updating lead: ${error.message}`);
+    }
+
+    return NextResponse.json({ data: { success: true }, error: null });
+  } catch (error: any) {
+    console.error('Error patching lead:', error);
+    return NextResponse.json(
+      { data: null, error: { code: 'PATCH_FAILED', message: error.message || 'An error occurred.' } },
+      { status: 500 }
+    );
+  }
+}
+

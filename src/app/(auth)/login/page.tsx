@@ -1,37 +1,68 @@
 'use client';
 
 import React, { useState } from 'react';
-import { supabase } from '@/lib/supabase';
-import { Sparkles, Mail, Lock, AlertCircle, ArrowRight, Eye, EyeOff } from 'lucide-react';
+import { createClient } from '@/utils/supabase/client';
+import { Target, Mail, Lock, AlertCircle, ArrowRight, Eye, EyeOff, Building, Sparkles } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
 export default function LoginPage() {
+  const [isSignUp, setIsSignUp] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [companyName, setCompanyName] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isSandboxLoading, setIsSandboxLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
   
   const router = useRouter();
+  const supabase = createClient();
 
-  const handleLogin = async (e: React.FormEvent) => {
+  const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     setError(null);
+    setSuccessMsg(null);
 
     try {
-      const { data, error: authError } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
+      if (isSignUp) {
+        // Sign Up Flow
+        if (!companyName.trim()) {
+          throw new Error('Company name is required for new accounts.');
+        }
 
-      if (authError) {
-        throw new Error(authError.message || 'Invalid email or password.');
-      }
+        const { data, error: authError } = await supabase.auth.signUp({
+          email,
+          password,
+          options: {
+            data: {
+              company_name: companyName.trim(),
+            }
+          }
+        });
 
-      if (data.session) {
-        router.push('/leads');
+        if (authError) throw new Error(authError.message);
+        
+        // Supabase often requires email verification by default
+        setSuccessMsg('Account created successfully! Please check your email to verify your account before logging in.');
+        
+        // If they don't require verification, data.session might exist
+        if (data.session) {
+          router.push('/leads');
+        }
+      } else {
+        // Sign In Flow
+        const { data, error: authError } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        });
+
+        if (authError) throw new Error(authError.message || 'Invalid email or password.');
+
+        if (data.session) {
+          router.push('/leads');
+        }
       }
     } catch (err: any) {
       setError(err.message || 'An error occurred during authentication.');
@@ -52,30 +83,70 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-black text-zinc-100 flex items-center justify-center p-4 font-sans relative overflow-hidden">
+    <div className="min-h-screen bg-[#f8fafc] text-slate-900 flex items-center justify-center p-4 font-sans relative overflow-hidden">
       {/* Background visual accents */}
-      <div className="absolute top-0 left-1/4 w-96 h-96 bg-indigo-600/10 rounded-full blur-[120px] pointer-events-none"></div>
-      <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-teal-600/10 rounded-full blur-[100px] pointer-events-none"></div>
+      <div className="absolute top-0 left-1/4 w-96 h-96 bg-blue-600/5 rounded-full blur-[120px] pointer-events-none"></div>
+      <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-teal-600/5 rounded-full blur-[100px] pointer-events-none"></div>
 
       <div className="w-full max-w-md space-y-6 relative z-10">
         {/* Logo Header */}
-        <div className="text-center space-y-2">
-          <div className="w-12 h-12 rounded-xl bg-indigo-600 flex items-center justify-center neon-glow-primary mx-auto">
-            <Sparkles className="w-6 h-6 text-white" />
+        <div className="text-center space-y-4 mb-8">
+          <div className="w-48 h-12 flex items-center justify-center mx-auto">
+            <img src="/logo.png?v=2" alt="Apexora Logo" className="w-full h-full object-contain" />
           </div>
-          <h2 className="text-xl font-bold tracking-tight text-zinc-100">Welcome to AI CRM</h2>
-          <p className="text-xs text-zinc-500 max-w-xs mx-auto">
-            Log in to capture trade show leads and trigger follow-up sequences.
+          <p className="text-xs text-slate-500 max-w-xs mx-auto">
+            {isSignUp 
+              ? 'Join today to capture event leads instantly and automate follow-ups.' 
+              : 'Sign in to access your event leads and intelligence.'}
           </p>
         </div>
 
         {/* Login Panel */}
-        <div className="glass-panel p-8 rounded-3xl space-y-6 border border-white/5 bg-black/40 shadow-2xl backdrop-blur-xl">
-          <form onSubmit={handleLogin} className="space-y-4">
+        <div className="bg-white p-8 rounded-3xl space-y-6 border border-slate-200 shadow-xl shadow-slate-200/50">
+          
+          {/* Tabs */}
+          <div className="flex p-1 bg-slate-50 rounded-xl border border-slate-100">
+            <button
+              type="button"
+              onClick={() => { setIsSignUp(false); setError(null); setSuccessMsg(null); }}
+              className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${!isSignUp ? 'bg-white text-slate-900 shadow border border-slate-200/50' : 'text-slate-500 hover:text-slate-700'}`}
+            >
+              Sign In
+            </button>
+            <button
+              type="button"
+              onClick={() => { setIsSignUp(true); setError(null); setSuccessMsg(null); }}
+              className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${isSignUp ? 'bg-white text-slate-900 shadow border border-slate-200/50' : 'text-slate-500 hover:text-slate-700'}`}
+            >
+              Sign Up
+            </button>
+          </div>
+
+          <form onSubmit={handleAuth} className="space-y-4">
+            
+            {/* Company Name (Sign Up Only) */}
+            {isSignUp && (
+              <div className="space-y-1.5 animate-in fade-in slide-in-from-top-2 duration-300">
+                <label htmlFor="company" className="text-xs font-medium text-slate-600 flex items-center gap-1.5">
+                  <Building className="w-3.5 h-3.5 text-slate-800" />
+                  Company Name
+                </label>
+                <input
+                  type="text"
+                  id="company"
+                  value={companyName}
+                  onChange={(e) => setCompanyName(e.target.value)}
+                  placeholder="Acme Corp"
+                  required={isSignUp}
+                  className="w-full bg-slate-50 border border-slate-200 focus:bg-white focus:border-indigo-400 focus:ring-2 focus:ring-slate-200 rounded-2xl px-4 py-3 text-sm text-slate-900 placeholder-slate-400 transition-all outline-none"
+                />
+              </div>
+            )}
+
             {/* Email */}
             <div className="space-y-1.5">
-              <label htmlFor="email" className="text-xs font-medium text-zinc-400 flex items-center gap-1.5">
-                <Mail className="w-3.5 h-3.5 text-indigo-400" />
+              <label htmlFor="email" className="text-xs font-medium text-slate-600 flex items-center gap-1.5">
+                <Mail className="w-3.5 h-3.5 text-slate-800" />
                 Email Address
               </label>
               <input
@@ -85,14 +156,14 @@ export default function LoginPage() {
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="rep@yourcompany.com"
                 required
-                className="w-full bg-black/50 border border-white/5 focus:border-indigo-500/50 focus:ring-1 focus:ring-indigo-500/20 rounded-2xl px-4 py-3 text-sm text-zinc-100 placeholder-zinc-600 transition-all outline-none shadow-inner"
+                className="w-full bg-slate-50 border border-slate-200 focus:bg-white focus:border-indigo-400 focus:ring-2 focus:ring-slate-200 rounded-2xl px-4 py-3 text-sm text-slate-900 placeholder-slate-400 transition-all outline-none"
               />
             </div>
 
             {/* Password */}
             <div className="space-y-1.5">
-              <label htmlFor="password" className="text-xs font-medium text-zinc-400 flex items-center gap-1.5">
-                <Lock className="w-3.5 h-3.5 text-indigo-400" />
+              <label htmlFor="password" className="text-xs font-medium text-slate-600 flex items-center gap-1.5">
+                <Lock className="w-3.5 h-3.5 text-slate-800" />
                 Password
               </label>
               <div className="relative">
@@ -103,12 +174,12 @@ export default function LoginPage() {
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
                   required
-                  className="w-full bg-black/50 border border-white/5 focus:border-indigo-500/50 focus:ring-1 focus:ring-indigo-500/20 rounded-2xl pl-4 pr-10 py-3 text-sm text-zinc-100 placeholder-zinc-600 transition-all outline-none shadow-inner"
+                  className="w-full bg-slate-50 border border-slate-200 focus:bg-white focus:border-indigo-400 focus:ring-2 focus:ring-slate-200 rounded-2xl px-4 py-3 text-sm text-slate-900 placeholder-slate-400 transition-all outline-none"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-4 top-3.5 text-zinc-500 hover:text-zinc-300 transition-colors"
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
                 >
                   {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
@@ -116,57 +187,50 @@ export default function LoginPage() {
             </div>
 
             {error && (
-              <div className="p-3 bg-red-950/30 border border-red-500/20 text-red-400 rounded-lg text-xs flex items-start gap-2">
-                <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+              <div className="p-3 rounded-xl bg-red-50 border border-red-200 flex items-start gap-2 text-red-600 text-xs leading-relaxed">
+                <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
                 <span>{error}</span>
+              </div>
+            )}
+
+            {successMsg && (
+              <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 flex items-start gap-2 text-emerald-600 text-xs leading-relaxed">
+                <Sparkles className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                <span>{successMsg}</span>
               </div>
             )}
 
             <button
               type="submit"
-              disabled={isLoading || isSandboxLoading}
-              className="w-full py-3.5 px-4 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-sm font-bold text-white flex items-center justify-center gap-2 neon-glow-primary hover:scale-[1.02] transition-all shadow-xl"
+              disabled={isLoading}
+              className="w-full py-3.5 rounded-2xl bg-blue-600 text-white font-bold text-sm shadow-md hover:bg-blue-700 hover:shadow-lg transition-all flex items-center justify-center gap-2 mt-2 disabled:opacity-70"
             >
               {isLoading ? (
-                <span className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
               ) : (
                 <>
-                  Sign In
+                  {isSignUp ? 'Create Account' : 'Sign In'}
                   <ArrowRight className="w-4 h-4" />
                 </>
               )}
             </button>
           </form>
 
-          <div className="relative flex items-center justify-center py-2">
-            <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-white/5"></div>
-            </div>
-            <span className="relative px-4 bg-transparent backdrop-blur-md text-[10px] uppercase font-bold text-zinc-500 tracking-widest rounded-full">
-              Or Demo App
-            </span>
+          {/* Sandbox Bypass */}
+          <div className="pt-6 mt-6 border-t border-slate-100">
+            <button
+              onClick={handleSandboxBypass}
+              disabled={isSandboxLoading}
+              className="w-full py-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-600 font-semibold text-xs hover:bg-slate-100 hover:text-slate-900 transition-all flex items-center justify-center gap-2"
+            >
+              {isSandboxLoading ? (
+                <div className="w-3.5 h-3.5 border-2 border-slate-400 border-t-transparent rounded-full animate-spin"></div>
+              ) : (
+                'Bypass to Sandbox Dashboard'
+              )}
+            </button>
           </div>
-
-          {/* Sandbox Bypass Action */}
-          <button
-            onClick={handleSandboxBypass}
-            disabled={isLoading || isSandboxLoading}
-            className="w-full py-3.5 px-4 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 text-xs font-bold text-zinc-300 flex items-center justify-center gap-1.5 transition-all hover:scale-[1.02]"
-          >
-            {isSandboxLoading ? (
-              <span className="w-4 h-4 border-2 border-zinc-400 border-t-transparent rounded-full animate-spin"></span>
-            ) : (
-              <>
-                Bypass Auth (Sandbox Mode)
-              </>
-            )}
-          </button>
         </div>
-
-        {/* Footer info */}
-        <p className="text-[10px] text-center text-zinc-600 font-mono">
-          Secured with Supabase Auth & RLS policies
-        </p>
       </div>
     </div>
   );
