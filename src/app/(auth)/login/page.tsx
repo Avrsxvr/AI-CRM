@@ -13,7 +13,6 @@ export default function LoginPage() {
   const [companyName, setCompanyName] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [isSandboxLoading, setIsSandboxLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   
@@ -77,17 +76,6 @@ export default function LoginPage() {
     } finally {
       setIsLoading(false);
     }
-  };
-
-  // Allows client to bypass authentication during sandbox testing/demos
-  const handleSandboxBypass = () => {
-    setIsSandboxLoading(true);
-    setError(null);
-    setTimeout(() => {
-      // Direct routing to Leads dashboard
-      router.push('/leads');
-      setIsSandboxLoading(false);
-    }, 800);
   };
 
   return (
@@ -251,20 +239,6 @@ export default function LoginPage() {
             )}
           </form>
 
-          {/* Sandbox Bypass */}
-          <div className="pt-6 mt-6 border-t border-slate-100">
-            <button
-              onClick={handleSandboxBypass}
-              disabled={isSandboxLoading}
-              className="w-full py-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-600 font-semibold text-xs hover:bg-slate-100 hover:text-slate-900 transition-all flex items-center justify-center gap-2"
-            >
-              {isSandboxLoading ? (
-                <div className="w-3.5 h-3.5 border-2 border-slate-400 border-t-transparent rounded-full animate-spin"></div>
-              ) : (
-                'Bypass to Sandbox Dashboard'
-              )}
-            </button>
-          </div>
         </div>
       </div>
     </div>
