@@ -72,12 +72,12 @@ export default function Sidebar() {
         {/* Logo */}
         <div className="w-full flex items-center justify-center px-2 py-6 border-b border-slate-200 min-h-[80px]">
           {isExpanded ? (
-            <div className="w-32 h-6 flex flex-shrink-0 items-center justify-center animate-in fade-in zoom-in-95 duration-200">
+            <div className="w-32 h-6 flex flex-shrink-0 items-center justify-center animate-in fade-in zoom-in-95 duration-200 translate-x-1">
               <img src="/logo.png?v=2" alt="Apexora Logo" className="w-full h-full object-contain" />
             </div>
           ) : (
-            <div className="w-10 h-10 flex-shrink-0 rounded-xl bg-slate-900 flex items-center justify-center shadow-md animate-in fade-in zoom-in-95 duration-200">
-              <span className="text-white font-black text-xl">A</span>
+            <div className="w-10 h-10 flex-shrink-0 rounded-xl flex items-center justify-center animate-in fade-in zoom-in-95 duration-200 p-0.5">
+              <img src="/ax_icon.png?v=1" alt="AX Logo" className="w-full h-full object-contain drop-shadow-sm" />
             </div>
           )}
         </div>

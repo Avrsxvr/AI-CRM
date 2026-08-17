@@ -91,7 +91,7 @@ export default function LoginPage() {
       <div className="w-full max-w-md space-y-6 relative z-10">
         {/* Logo Header */}
         <div className="text-center space-y-4 mb-8">
-          <div className="w-48 h-12 flex items-center justify-center mx-auto">
+          <div className="w-48 h-12 flex items-center justify-center mx-auto translate-x-2">
             <img src="/logo.png?v=2" alt="Apexora Logo" className="w-full h-full object-contain" />
           </div>
           <p className="text-xs text-slate-500 max-w-xs mx-auto">
