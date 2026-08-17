@@ -7,6 +7,7 @@ import { useRouter } from 'next/navigation';
 
 export default function LoginPage() {
   const [isSignUp, setIsSignUp] = useState(false);
+  const [isForgotPassword, setIsForgotPassword] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [companyName, setCompanyName] = useState('');
@@ -26,7 +27,14 @@ export default function LoginPage() {
     setSuccessMsg(null);
 
     try {
-      if (isSignUp) {
+      if (isForgotPassword) {
+        // Password Reset Flow
+        const { error: authError } = await supabase.auth.resetPasswordForEmail(email, {
+          redirectTo: `${window.location.origin}/update-password`,
+        });
+        if (authError) throw new Error(authError.message);
+        setSuccessMsg('Password reset link sent! Please check your email.');
+      } else if (isSignUp) {
         // Sign Up Flow
         if (!companyName.trim()) {
           throw new Error('Company name is required for new accounts.');
@@ -95,9 +103,11 @@ export default function LoginPage() {
             <img src="/logo.png?v=2" alt="Apexora Logo" className="w-full h-full object-contain" />
           </div>
           <p className="text-xs text-slate-500 max-w-xs mx-auto">
-            {isSignUp 
-              ? 'Join today to capture event leads instantly and automate follow-ups.' 
-              : 'Sign in to access your event leads and intelligence.'}
+            {isForgotPassword
+              ? 'Enter your email address and we will send you a secure link to reset your password.'
+              : isSignUp 
+                ? 'Join today to capture event leads instantly and automate follow-ups.' 
+                : 'Sign in to access your event leads and intelligence.'}
           </p>
         </div>
 
@@ -105,27 +115,29 @@ export default function LoginPage() {
         <div className="bg-white p-8 rounded-3xl space-y-6 border border-slate-200 shadow-xl shadow-slate-200/50">
           
           {/* Tabs */}
-          <div className="flex p-1 bg-slate-50 rounded-xl border border-slate-100">
-            <button
-              type="button"
-              onClick={() => { setIsSignUp(false); setError(null); setSuccessMsg(null); }}
-              className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${!isSignUp ? 'bg-white text-slate-900 shadow border border-slate-200/50' : 'text-slate-500 hover:text-slate-700'}`}
-            >
-              Sign In
-            </button>
-            <button
-              type="button"
-              onClick={() => { setIsSignUp(true); setError(null); setSuccessMsg(null); }}
-              className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${isSignUp ? 'bg-white text-slate-900 shadow border border-slate-200/50' : 'text-slate-500 hover:text-slate-700'}`}
-            >
-              Sign Up
-            </button>
-          </div>
+          {!isForgotPassword && (
+            <div className="flex p-1 bg-slate-50 rounded-xl border border-slate-100">
+              <button
+                type="button"
+                onClick={() => { setIsSignUp(false); setError(null); setSuccessMsg(null); }}
+                className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${!isSignUp ? 'bg-white text-slate-900 shadow border border-slate-200/50' : 'text-slate-500 hover:text-slate-700'}`}
+              >
+                Sign In
+              </button>
+              <button
+                type="button"
+                onClick={() => { setIsSignUp(true); setError(null); setSuccessMsg(null); }}
+                className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${isSignUp ? 'bg-white text-slate-900 shadow border border-slate-200/50' : 'text-slate-500 hover:text-slate-700'}`}
+              >
+                Sign Up
+              </button>
+            </div>
+          )}
 
           <form onSubmit={handleAuth} className="space-y-4">
             
             {/* Company Name (Sign Up Only) */}
-            {isSignUp && (
+            {isSignUp && !isForgotPassword && (
               <div className="space-y-1.5 animate-in fade-in slide-in-from-top-2 duration-300">
                 <label htmlFor="company" className="text-xs font-medium text-slate-600 flex items-center gap-1.5">
                   <Building className="w-3.5 h-3.5 text-slate-800" />
@@ -161,22 +173,34 @@ export default function LoginPage() {
             </div>
 
             {/* Password */}
-            <div className="space-y-1.5">
-              <label htmlFor="password" className="text-xs font-medium text-slate-600 flex items-center gap-1.5">
-                <Lock className="w-3.5 h-3.5 text-slate-800" />
-                Password
-              </label>
-              <div className="relative">
-                <input
-                  type={showPassword ? 'text' : 'password'}
-                  id="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="••••••••"
-                  required
-                  className="w-full bg-slate-50 border border-slate-200 focus:bg-white focus:border-indigo-400 focus:ring-2 focus:ring-slate-200 rounded-2xl px-4 py-3 text-sm text-slate-900 placeholder-slate-400 transition-all outline-none"
-                />
-                <button
+            {!isForgotPassword && (
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <label htmlFor="password" className="text-xs font-medium text-slate-600 flex items-center gap-1.5">
+                    <Lock className="w-3.5 h-3.5 text-slate-800" />
+                    Password
+                  </label>
+                  {!isSignUp && (
+                    <button
+                      type="button"
+                      onClick={() => { setIsForgotPassword(true); setError(null); setSuccessMsg(null); }}
+                      className="text-xs text-blue-600 hover:text-blue-700 font-semibold"
+                    >
+                      Forgot password?
+                    </button>
+                  )}
+                </div>
+                <div className="relative">
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    id="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="••••••••"
+                    required={!isForgotPassword}
+                    className="w-full bg-slate-50 border border-slate-200 focus:bg-white focus:border-indigo-400 focus:ring-2 focus:ring-slate-200 rounded-2xl px-4 py-3 text-sm text-slate-900 placeholder-slate-400 transition-all outline-none"
+                  />
+                  <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
                   className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
@@ -185,6 +209,7 @@ export default function LoginPage() {
                 </button>
               </div>
             </div>
+            )}
 
             {error && (
               <div className="p-3 rounded-xl bg-red-50 border border-red-200 flex items-start gap-2 text-red-600 text-xs leading-relaxed">
@@ -209,11 +234,21 @@ export default function LoginPage() {
                 <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
               ) : (
                 <>
-                  {isSignUp ? 'Create Account' : 'Sign In'}
+                  {isForgotPassword ? 'Send Reset Link' : isSignUp ? 'Create Account' : 'Sign In'}
                   <ArrowRight className="w-4 h-4" />
                 </>
               )}
             </button>
+
+            {isForgotPassword && (
+              <button
+                type="button"
+                onClick={() => { setIsForgotPassword(false); setError(null); setSuccessMsg(null); }}
+                className="w-full text-center text-xs text-slate-500 hover:text-slate-700 font-medium"
+              >
+                &larr; Back to Sign In
+              </button>
+            )}
           </form>
 
           {/* Sandbox Bypass */}

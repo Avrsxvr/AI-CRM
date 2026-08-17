@@ -38,18 +38,23 @@ export async function updateSession(request: NextRequest) {
   // Define public routes that don't require authentication
   const isPublicRoute = 
     request.nextUrl.pathname.startsWith('/login') ||
+    request.nextUrl.pathname.startsWith('/update-password') ||
     request.nextUrl.pathname.startsWith('/auth') ||
     request.nextUrl.pathname.startsWith('/api/health') ||
     request.nextUrl.pathname.startsWith('/api/cron') ||
     request.nextUrl.pathname.startsWith('/api/webhooks');
 
-  if (
-    !user &&
-    !isPublicRoute
-  ) {
+  if (!user && !isPublicRoute) {
     // no user, potentially respond by redirecting the user to the login page
     const url = request.nextUrl.clone()
     url.pathname = '/login'
+    return NextResponse.redirect(url)
+  }
+
+  // Redirect authenticated users away from login
+  if (user && request.nextUrl.pathname.startsWith('/login')) {
+    const url = request.nextUrl.clone()
+    url.pathname = '/leads'
     return NextResponse.redirect(url)
   }
 

@@ -9,6 +9,7 @@ import {
   TrendingUp, Users, Mail, Activity, RefreshCw, BarChart2
 } from 'lucide-react';
 import { motion } from 'framer-motion';
+import Link from 'next/link';
 
 export default function AnalyticsPage() {
   const [data, setData] = useState<any>(null);
@@ -75,25 +76,25 @@ export default function AnalyticsPage() {
             
             {/* Top Metrics Cards */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-              <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm flex items-center gap-4">
-                <div className="w-12 h-12 rounded-2xl bg-blue-100 text-blue-600 flex items-center justify-center">
+              <Link href="/leads" className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm flex items-center gap-4 hover:-translate-y-1 hover:shadow-md transition-all group">
+                <div className="w-12 h-12 rounded-2xl bg-blue-100 text-blue-600 flex items-center justify-center group-hover:bg-blue-600 group-hover:text-white transition-colors">
                   <Users className="w-6 h-6" />
                 </div>
                 <div>
                   <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Total Leads</p>
                   <h3 className="text-3xl font-black text-slate-900 leading-none mt-1">{data.totalLeads}</h3>
                 </div>
-              </div>
+              </Link>
               
-              <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm flex items-center gap-4">
-                <div className="w-12 h-12 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center">
+              <Link href="/leads?filter=hot&sort=exhibition" className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm flex items-center gap-4 hover:-translate-y-1 hover:shadow-md transition-all group">
+                <div className="w-12 h-12 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center group-hover:bg-rose-600 group-hover:text-white transition-colors">
                   <TrendingUp className="w-6 h-6" />
                 </div>
                 <div>
                   <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Hot Leads</p>
                   <h3 className="text-3xl font-black text-slate-900 leading-none mt-1">{data.hotLeads}</h3>
                 </div>
-              </div>
+              </Link>
 
               <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm flex items-center gap-4">
                 <div className="w-12 h-12 rounded-2xl bg-indigo-100 text-indigo-600 flex items-center justify-center">

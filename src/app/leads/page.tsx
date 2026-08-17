@@ -30,6 +30,7 @@ export default function LeadsDashboard() {
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [sortField, setSortField] = useState<string | null>(null);
   const [offlineQueueLength, setOfflineQueueLength] = useState(0);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -280,6 +281,16 @@ export default function LeadsDashboard() {
   }, [statusFilter]);
 
   useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const filter = params.get('filter');
+      const sort = params.get('sort');
+      if (filter) setStatusFilter(filter);
+      if (sort) setSortField(sort);
+    }
+  }, []);
+
+  useEffect(() => {
     if (typeof window === 'undefined') return;
     
     const updateOfflineCount = () => {
@@ -322,14 +333,27 @@ export default function LeadsDashboard() {
   const filteredLeads = React.useMemo(() => {
     let list = leads;
     if (statusFilter === 'hot') list = leads.filter(l => l.context_summary?.is_hot === true);
-    return list.filter((lead) => {
+    
+    list = list.filter((lead) => {
       const contact = lead.contact_fields || {};
       const name = (contact.name || '').toLowerCase();
       const company = (contact.company || '').toLowerCase();
       const query = searchQuery.toLowerCase();
       return name.includes(query) || company.includes(query);
     });
-  }, [leads, searchQuery, statusFilter]);
+
+    if (sortField === 'exhibition') {
+      list = [...list].sort((a, b) => {
+        const extA = (a.exhibition || '').toLowerCase();
+        const extB = (b.exhibition || '').toLowerCase();
+        if (!extA) return 1;
+        if (!extB) return -1;
+        return extA.localeCompare(extB);
+      });
+    }
+
+    return list;
+  }, [leads, searchQuery, statusFilter, sortField]);
 
   return (
     <div className="min-h-screen flex flex-col relative overflow-hidden">

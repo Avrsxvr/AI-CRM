@@ -1,0 +1,139 @@
+'use client';
+
+import React, { useState, useEffect } from 'react';
+import { createClient } from '@/utils/supabase/client';
+import { Lock, AlertCircle, ArrowRight, Eye, EyeOff, Sparkles, KeyRound } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+
+export default function UpdatePasswordPage() {
+  const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
+  
+  const router = useRouter();
+  const supabase = createClient();
+
+  useEffect(() => {
+    // Check if the user is actually authenticated via the recovery link
+    const checkSession = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        setError("Your recovery link is invalid or has expired. Please request a new one.");
+      }
+    };
+    checkSession();
+  }, [supabase]);
+
+  const handleUpdatePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsLoading(true);
+    setError(null);
+    setSuccessMsg(null);
+
+    try {
+      const { error: updateError } = await supabase.auth.updateUser({
+        password: password,
+      });
+
+      if (updateError) throw new Error(updateError.message);
+      
+      setSuccessMsg('Password updated successfully! Redirecting...');
+      
+      setTimeout(() => {
+        router.push('/leads');
+      }, 1500);
+
+    } catch (err: any) {
+      setError(err.message || 'An error occurred while updating your password.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-[#f8fafc] text-slate-900 flex items-center justify-center p-4 font-sans relative overflow-hidden">
+      {/* Background visual accents */}
+      <div className="absolute top-0 right-1/4 w-96 h-96 bg-blue-600/5 rounded-full blur-[120px] pointer-events-none"></div>
+      <div className="absolute bottom-0 left-1/4 w-96 h-96 bg-teal-600/5 rounded-full blur-[100px] pointer-events-none"></div>
+
+      <div className="w-full max-w-md space-y-6 relative z-10">
+        {/* Logo Header */}
+        <div className="text-center space-y-4 mb-8">
+          <div className="w-16 h-16 bg-white rounded-2xl flex items-center justify-center mx-auto shadow-sm border border-slate-200">
+            <KeyRound className="w-8 h-8 text-blue-600" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight text-slate-900">Set New Password</h1>
+            <p className="text-xs text-slate-500 max-w-xs mx-auto mt-2">
+              Please enter your new password below.
+            </p>
+          </div>
+        </div>
+
+        {/* Update Password Panel */}
+        <div className="bg-white p-8 rounded-3xl space-y-6 border border-slate-200 shadow-xl shadow-slate-200/50">
+          <form onSubmit={handleUpdatePassword} className="space-y-4">
+            
+            {/* Password */}
+            <div className="space-y-1.5">
+              <label htmlFor="password" className="text-xs font-medium text-slate-600 flex items-center gap-1.5">
+                <Lock className="w-3.5 h-3.5 text-slate-800" />
+                New Password
+              </label>
+              <div className="relative">
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  id="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="••••••••"
+                  required
+                  minLength={6}
+                  className="w-full bg-slate-50 border border-slate-200 focus:bg-white focus:border-indigo-400 focus:ring-2 focus:ring-slate-200 rounded-2xl px-4 py-3 text-sm text-slate-900 placeholder-slate-400 transition-all outline-none"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
+                >
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+            </div>
+
+            {error && (
+              <div className="p-3 rounded-xl bg-red-50 border border-red-200 flex items-start gap-2 text-red-600 text-xs leading-relaxed">
+                <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                <span>{error}</span>
+              </div>
+            )}
+
+            {successMsg && (
+              <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 flex items-start gap-2 text-emerald-600 text-xs leading-relaxed">
+                <Sparkles className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                <span>{successMsg}</span>
+              </div>
+            )}
+
+            <button
+              type="submit"
+              disabled={isLoading || !!successMsg}
+              className="w-full py-3.5 rounded-2xl bg-blue-600 text-white font-bold text-sm shadow-md hover:bg-blue-700 hover:shadow-lg transition-all flex items-center justify-center gap-2 mt-2 disabled:opacity-70"
+            >
+              {isLoading ? (
+                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+              ) : (
+                <>
+                  Update Password
+                  <ArrowRight className="w-4 h-4" />
+                </>
+              )}
+            </button>
+          </form>
+        </div>
+      </div>
+    </div>
+  );
+}
