@@ -6,6 +6,7 @@ import { FollowupDraftAgent } from '@/lib/agents/followupDraft';
 import { ZohoService } from '@/lib/services/zoho';
 import { QueueService } from '@/lib/services/queue';
 import { SettingsService } from '@/lib/services/settings';
+import { ZohoCampaignsService } from '@/lib/services/zohoCampaigns';
 
 export async function GET(req: NextRequest) {
   // Enforce CRON security check (check header or secret key to prevent unauthorized GET trigger)
@@ -77,9 +78,9 @@ export async function GET(req: NextRequest) {
 
         // Fetch settings for the lead's organization
         const settings = await SettingsService.getSettings(lead.organization_id);
-        const apiKey = settings.gemini_api_key;
+        const apiKey = settings.gemini_api_key || process.env.GEMINI_API_KEY;
         if (!apiKey) {
-          throw new Error('Gemini API key is not configured for this organization.');
+          throw new Error('Gemini API key is not configured in settings or environment variables.');
         }
 
         if (sequencePosition === 1 && emailLevel === 1 && subjectLevel === 1) {
@@ -108,21 +109,32 @@ export async function GET(req: NextRequest) {
         const dynamicAppUrl = `${protocol}://${host}`;
 
         // 4. Send Email
-        const emailCredentials = {
-          user: settings.email_user,
-          pass: settings.email_password,
-          fromName: settings.email_from_name
-        };
+        const email = contactFields.email || 'avrsmain@gmail.com';
+        const name = contactFields.name || 'Valued Customer';
+        const zohoCampaignKey = process.env.ZOHO_CAMPAIGN_KEY;
 
-        const messageId = await EmailService.sendEmail(
-          emailCredentials,
-          email,
-          subject,
-          body,
-          lead.id,
-          sequencePosition,
-          dynamicAppUrl
-        );
+        let messageId = `zoho-campaign-${Date.now()}`;
+
+        if (zohoCampaignKey) {
+          console.log(`Dispatching followup ${sequencePosition} via Zoho Campaigns...`);
+          await ZohoCampaignsService.triggerEmail(zohoCampaignKey, email, name, body);
+        } else {
+          const emailCredentials = {
+            user: settings.email_user || process.env.EMAIL_USER || process.env.EMAIL_FROM_ADDRESS || 'onboarding@resend.dev',
+            pass: settings.email_password || process.env.EMAIL_PASSWORD || process.env.RESEND_API_KEY || '',
+            fromName: settings.email_from_name || process.env.EMAIL_FROM_NAME || 'Sales Team'
+          };
+
+          messageId = await EmailService.sendEmail(
+            emailCredentials,
+            email,
+            subject,
+            body,
+            lead.id,
+            sequencePosition,
+            dynamicAppUrl
+          );
+        }
 
         // 5. Update followup to 'sent' and log actual content sent
         if (followup) {
@@ -140,14 +152,21 @@ export async function GET(req: NextRequest) {
             const currentNeeds = lead.context_summary?.needs || 'Not specified';
             const baseDescription = `Prospect captured from Trade Show recording. Problem: ${currentProblem}. Needs: ${currentNeeds}`;
             
-            if (settings.zoho_client_id && settings.zoho_client_secret && settings.zoho_refresh_token) {
+            const isZohoConfigured = !!settings.zoho_client_id;
+            const zohoClientId = isZohoConfigured ? settings.zoho_client_id : process.env.ZOHO_CLIENT_ID;
+            const zohoClientSecret = isZohoConfigured ? settings.zoho_client_secret : process.env.ZOHO_CLIENT_SECRET;
+            const zohoRefreshToken = isZohoConfigured ? settings.zoho_refresh_token : process.env.ZOHO_REFRESH_TOKEN;
+            const zohoApiUrl = isZohoConfigured ? settings.zoho_api_url : (process.env.ZOHO_API_URL || 'https://www.zohoapis.in');
+            const zohoAccountsUrl = isZohoConfigured ? settings.zoho_accounts_url : (process.env.ZOHO_ACCOUNTS_URL || 'https://accounts.zoho.in');
+
+            if (zohoClientId && zohoClientSecret && zohoRefreshToken) {
               const zohoCredentials = {
                 orgId: lead.organization_id,
-                clientId: settings.zoho_client_id,
-                clientSecret: settings.zoho_client_secret,
-                refreshToken: settings.zoho_refresh_token,
-                apiUrl: settings.zoho_api_url,
-                accountsUrl: settings.zoho_accounts_url
+                clientId: zohoClientId,
+                clientSecret: zohoClientSecret,
+                refreshToken: zohoRefreshToken,
+                apiUrl: zohoApiUrl,
+                accountsUrl: zohoAccountsUrl
               };
               await ZohoService.updateLead(zohoCredentials, lead.crm_record_id, {
                 Lead_Status: 'Attempted to Contact',

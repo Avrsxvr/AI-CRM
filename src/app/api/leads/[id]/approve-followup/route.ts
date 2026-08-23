@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { LeadsRepository } from '@/lib/repositories/leads';
 import { ZohoService } from '@/lib/services/zoho';
-import { createClient } from '@/utils/supabase/server';
+import { supabaseAdmin } from '@/lib/supabase';
 import { SheetsService } from '@/lib/services/sheets';
 import { SchedulerAgent } from '@/lib/agents/scheduler';
 import { EmailService } from '@/lib/services/email';
 import { SettingsService } from '@/lib/services/settings';
+import { ZohoCampaignsService } from '@/lib/services/zohoCampaigns';
 
 export async function POST(
   req: NextRequest,
@@ -30,7 +31,7 @@ export async function POST(
     }
 
     // 1. Fetch the current lead details from the database
-    const supabase = await createClient();
+    const supabase = supabaseAdmin;
     const lead = await LeadsRepository.getLeadById(supabase, id);
     if (!lead) {
       return NextResponse.json(
@@ -80,16 +81,23 @@ ${emailBody}
     const settings = await SettingsService.getSettings(lead.organization_id);
 
     try {
-      if (!settings.zoho_client_id || !settings.zoho_client_secret || !settings.zoho_refresh_token) {
-        throw new Error("Zoho credentials missing in organization settings.");
+      const isZohoConfigured = !!settings.zoho_client_id;
+      const zohoClientId = isZohoConfigured ? settings.zoho_client_id : process.env.ZOHO_CLIENT_ID;
+      const zohoClientSecret = isZohoConfigured ? settings.zoho_client_secret : process.env.ZOHO_CLIENT_SECRET;
+      const zohoRefreshToken = isZohoConfigured ? settings.zoho_refresh_token : process.env.ZOHO_REFRESH_TOKEN;
+      const zohoApiUrl = isZohoConfigured ? settings.zoho_api_url : (process.env.ZOHO_API_URL || 'https://www.zohoapis.in');
+      const zohoAccountsUrl = isZohoConfigured ? settings.zoho_accounts_url : (process.env.ZOHO_ACCOUNTS_URL || 'https://accounts.zoho.in');
+
+      if (!zohoClientId || !zohoClientSecret || !zohoRefreshToken) {
+        throw new Error("Zoho credentials missing in organization settings and environment.");
       }
       const zohoCredentials = {
         orgId: lead.organization_id,
-        clientId: settings.zoho_client_id,
-        clientSecret: settings.zoho_client_secret,
-        refreshToken: settings.zoho_refresh_token,
-        apiUrl: settings.zoho_api_url,
-        accountsUrl: settings.zoho_accounts_url
+        clientId: zohoClientId,
+        clientSecret: zohoClientSecret,
+        refreshToken: zohoRefreshToken,
+        apiUrl: zohoApiUrl,
+        accountsUrl: zohoAccountsUrl
       };
       const zohoResult = await ZohoService.createLead(zohoCredentials, crmPayload);
       crmRecordId = zohoResult.crmRecordId;
@@ -135,13 +143,24 @@ ${emailBody}
         const dynamicAppUrl = `${protocol}://${host}`;
 
         // Send the first email immediately instead of waiting for the cron job
-        const emailCredentials = {
-          user: settings.email_user,
-          pass: settings.email_password,
-          fromName: settings.email_from_name
-        };
-        await EmailService.sendEmail(emailCredentials, contactFields.email || 'avrsmain@gmail.com', subject, emailBody, id, 1, dynamicAppUrl, attachments);
+        const recipientEmail = contactFields.email || 'avrsmain@gmail.com';
+        const recipientName = contactFields.name || 'Valued Customer';
         
+        const zohoCampaignKey = process.env.ZOHO_CAMPAIGN_KEY;
+
+        if (zohoCampaignKey) {
+          // Dispatch using Zoho Campaigns
+          console.log('Dispatching initial email via Zoho Campaigns...');
+          await ZohoCampaignsService.triggerEmail(zohoCampaignKey, recipientEmail, recipientName, emailBody);
+        } else {
+          // Fallback to original custom Node.js Gmail dispatch
+          const emailCredentials = {
+            user: settings.email_user || process.env.EMAIL_USER || process.env.EMAIL_FROM_ADDRESS || 'onboarding@resend.dev',
+            pass: settings.email_password || process.env.EMAIL_PASSWORD || process.env.RESEND_API_KEY || '',
+            fromName: settings.email_from_name || process.env.EMAIL_FROM_NAME || 'Sales Team'
+          };
+          await EmailService.sendEmail(emailCredentials, recipientEmail, subject, emailBody, id, 1, dynamicAppUrl, attachments);
+        }
         // Queue the remaining bi-weekly drip sequence starting at touch 2
         await SchedulerAgent.scheduleSequence(id, { subject, body: emailBody });
         await LeadsRepository.updateStatus(supabase, id, 'synced'); // Ensure status is correctly tracked

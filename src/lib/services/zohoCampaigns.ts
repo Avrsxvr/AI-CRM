@@ -59,6 +59,53 @@ export class ZohoCampaignsService {
   }
 
   /**
+   * Triggers an email dispatch using Zoho Campaigns Transmission API
+   */
+  public static async triggerEmail(
+    campaignKey: string,
+    recipientEmail: string,
+    recipientName: string,
+    customBody: string
+  ): Promise<boolean> {
+    try {
+      const token = await this.getAccessToken();
+      const apiUrl = `${this.getApiUrl()}/json/transmission`;
+
+      // Structure for Zoho Campaigns transmission
+      const payload = {
+        campaign_key: campaignKey,
+        recipients: [
+          {
+            email: recipientEmail,
+            first_name: recipientName,
+            merge_data: {
+              AI_Email_Body: customBody
+            }
+          }
+        ]
+      };
+
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Zoho-oauthtoken ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        console.warn('Failed to trigger Zoho Campaigns email:', await response.text());
+        return false;
+      }
+      return true;
+    } catch (error) {
+      console.error('Error triggering Zoho Campaigns email:', error);
+      return false;
+    }
+  }
+
+  /**
    * Fetches aggregate campaign statistics (sent, opened, clicked) from Zoho Campaigns.
    */
   public static async fetchCampaignAnalytics(campaignName: string) {

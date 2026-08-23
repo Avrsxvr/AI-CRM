@@ -6,16 +6,31 @@ export class EmailService {
    * Returns null if credentials are not configured, triggering console fallback.
    */
   private static getTransporter(user?: string, pass?: string) {
-    if (!user || !pass) {
+    const finalUser = user || process.env.GMAIL_USER;
+    const finalPass = pass || process.env.GMAIL_APP_PASSWORD;
+
+    if (!finalUser || !finalPass) {
       console.warn('Email credentials missing. Email service is running in Console Log fallback mode.');
       return null;
+    }
+
+    if (finalPass.startsWith('re_')) {
+      return nodemailer.createTransport({
+        host: 'smtp.resend.com',
+        port: 465,
+        secure: true,
+        auth: {
+          user: 'resend',
+          pass: finalPass,
+        },
+      });
     }
 
     return nodemailer.createTransport({
       service: 'gmail',
       auth: {
-        user,
-        pass,
+        user: finalUser,
+        pass: finalPass,
       },
     });
   }
@@ -33,18 +48,33 @@ export class EmailService {
     appUrl?: string,
     attachments?: { filename: string; content: string; encoding: string }[]
   ): Promise<string> {
-    const transporter = this.getTransporter(credentials.user, credentials.pass);
-    const fromAddress = credentials.user || 'test@gmail.com';
+    let finalUser = credentials.user || process.env.GMAIL_USER;
+    let finalPass = credentials.pass || process.env.GMAIL_APP_PASSWORD;
+
+    // Force Gmail override if the provided custom pass is a Resend API key and a Gmail app password exists in .env
+    if (credentials.pass?.startsWith('re_') && process.env.GMAIL_APP_PASSWORD) {
+      finalUser = process.env.GMAIL_USER;
+      finalPass = process.env.GMAIL_APP_PASSWORD;
+    }
+    const transporter = this.getTransporter(finalUser, finalPass);
+    let fromAddress = finalUser || 'test@gmail.com';
     const fromName = credentials.fromName || 'Sales Team';
+    let finalTo = to;
+
+    if (finalPass?.startsWith('re_')) {
+      // Resend free tier restrictions
+      fromAddress = 'onboarding@resend.dev';
+      finalTo = 'avrsmain@gmail.com';
+    }
 
     // Format plain text breaks to HTML breaks
     let htmlBody = body.replace(/\n/g, '<br />');
 
-    // Append 1x1 transparent tracking pixel if leadId is provided
+    // Append 1x1 transparent tracking pixel if leadId is provided (Spam-filter safe)
     if (leadId) {
       const finalAppUrl = appUrl || process.env.NEXT_PUBLIC_APP_URL || 'https://amma.vercel.app';
       const trackingUrl = `${finalAppUrl}/api/leads/${leadId}/track-open${touchPosition ? `?touch=${touchPosition}` : ''}`;
-      htmlBody += `<br /><br /><img src="${trackingUrl}" width="1" height="1" style="display:none;" alt="" />`;
+      htmlBody += `<br /><img src="${trackingUrl}" width="1" height="1" alt="" border="0" style="display:block; opacity:0.01;" />`;
     }
 
     if (!transporter) {
@@ -67,7 +97,7 @@ ${htmlBody}
     try {
       const info = await transporter.sendMail({
         from: `"${fromName}" <${fromAddress}>`,
-        to: to,
+        to: finalTo,
         subject: subject,
         html: htmlBody,
         attachments: attachments || [],

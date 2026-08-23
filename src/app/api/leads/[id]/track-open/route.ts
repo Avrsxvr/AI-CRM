@@ -30,6 +30,14 @@ export async function GET(
       const emailOpens = contextSummary.email_opens || {};
       emailOpens[touch] = (emailOpens[touch] || 0) + 1;
 
+      // Track the detailed history of every distinct open
+      const openHistory = contextSummary.open_history || [];
+      const currentTimestamp = new Date().toISOString();
+      openHistory.push({
+        touch,
+        timestamp: currentTimestamp
+      });
+
       // Determine if lead is "HOT" based on multiple email opens
       const isHot = newOpens >= 2;
 
@@ -37,6 +45,7 @@ export async function GET(
         ...contextSummary,
         open_count: newOpens,
         email_opens: emailOpens,
+        open_history: openHistory,
         is_hot: isHot,
       };
 
@@ -104,14 +113,21 @@ export async function GET(
       if (lead.crm_record_id && !lead.crm_record_id.startsWith('sheets:')) {
         try {
           const settings = await SettingsService.getSettings(lead.organization_id);
-          if (settings.zoho_client_id && settings.zoho_client_secret && settings.zoho_refresh_token) {
+          const isZohoConfigured = !!settings.zoho_client_id;
+          const zohoClientId = isZohoConfigured ? settings.zoho_client_id : process.env.ZOHO_CLIENT_ID;
+          const zohoClientSecret = isZohoConfigured ? settings.zoho_client_secret : process.env.ZOHO_CLIENT_SECRET;
+          const zohoRefreshToken = isZohoConfigured ? settings.zoho_refresh_token : process.env.ZOHO_REFRESH_TOKEN;
+          const zohoApiUrl = isZohoConfigured ? settings.zoho_api_url : (process.env.ZOHO_API_URL || 'https://www.zohoapis.in');
+          const zohoAccountsUrl = isZohoConfigured ? settings.zoho_accounts_url : (process.env.ZOHO_ACCOUNTS_URL || 'https://accounts.zoho.in');
+
+          if (zohoClientId && zohoClientSecret && zohoRefreshToken) {
             const zohoCredentials = {
               orgId: lead.organization_id,
-              clientId: settings.zoho_client_id,
-              clientSecret: settings.zoho_client_secret,
-              refreshToken: settings.zoho_refresh_token,
-              apiUrl: settings.zoho_api_url,
-              accountsUrl: settings.zoho_accounts_url
+              clientId: zohoClientId,
+              clientSecret: zohoClientSecret,
+              refreshToken: zohoRefreshToken,
+              apiUrl: zohoApiUrl,
+              accountsUrl: zohoAccountsUrl
             };
 
             const currentProblem = updatedContext.problem || 'Not specified';

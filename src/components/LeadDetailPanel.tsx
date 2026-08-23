@@ -117,17 +117,18 @@ export default function LeadDetailPanel({ lead, onClose, onRefresh }: LeadDetail
       }
     });
 
-    // 6. Opens
-    const openCount = context.open_count || 0;
-    if (openCount > 0) {
-      events.push({
-        title: 'Follow-up Email Opened',
-        timestamp: new Date(new Date(lead.created_at).getTime() + 10 * 60 * 1000).toISOString(),
-        icon: '👁️',
-        description: `Prospect opened email. Total opens: ${openCount} views. ${context.is_hot ? '🔥 HOT LEAD' : ''}`,
-        color: context.is_hot ? 'bg-rose-500 animate-pulse' : 'bg-rose-400'
-      });
-    }
+    // 6. Opens (real-time from followups)
+    followups.forEach((touch) => {
+      if (touch.status === 'opened' && touch.opened_at) {
+        events.push({
+          title: `Touch ${touch.sequence_position} Email Opened`,
+          timestamp: touch.opened_at,
+          icon: '👁️',
+          description: `Prospect opened Touch ${touch.sequence_position}. Total opens so far: ${context.open_count || 1}. ${context.is_hot ? '🔥 HOT LEAD' : ''}`,
+          color: context.is_hot ? 'bg-rose-500 animate-pulse' : 'bg-rose-400'
+        });
+      }
+    });
 
     return events.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
   };
@@ -656,7 +657,7 @@ export default function LeadDetailPanel({ lead, onClose, onRefresh }: LeadDetail
               <button
                 onClick={handleGenerateDraft}
                 disabled={isDrafting}
-                className="w-full py-4 rounded-2xl bg-blue-600 hover:bg-slate-800 text-slate-900 font-bold text-sm shadow-xl transition-all flex items-center justify-center gap-2 shadow-sm hover:scale-[1.01]"
+                className="w-full py-3.5 rounded-2xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-sm shadow-lg transition-all flex items-center justify-center gap-2 disabled:bg-slate-800 disabled:text-slate-400 disabled:cursor-not-allowed hover:scale-[1.01] active:scale-[0.98]"
               >
                 {isDrafting ? (
                   <>
@@ -800,6 +801,24 @@ export default function LeadDetailPanel({ lead, onClose, onRefresh }: LeadDetail
                 Waiting for the prospect to open the follow-up email.
               </p>
             )}
+          </div>
+        )}
+
+        {/* 6. Detailed Open History */}
+        {context.open_history && context.open_history.length > 0 && (
+          <div className="bg-white border border-slate-200 shadow-sm rounded-xl p-4 rounded-xl space-y-3">
+            <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5 border-b border-slate-200/40 pb-2">
+              <Clock className="w-4 h-4 text-slate-600" />
+              Detailed Open History
+            </h4>
+            <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1">
+              {[...context.open_history].reverse().map((event: any, i: number) => (
+                <div key={i} className="flex justify-between items-center text-[11px] py-1.5 px-3 bg-slate-50/50 rounded-lg border border-slate-200/60">
+                  <span className="font-semibold text-slate-700">Touch {event.touch === '1' ? '1' : event.touch}</span>
+                  <span className="text-slate-500 font-mono tracking-tight">{new Date(event.timestamp).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</span>
+                </div>
+              ))}
+            </div>
           </div>
         )}
 
