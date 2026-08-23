@@ -36,9 +36,9 @@ export async function POST(req: NextRequest) {
     }
 
     const settings = await SettingsService.getSettings(orgId);
-    const apiKey = settings.gemini_api_key;
+    const apiKey = settings.gemini_api_key || process.env.GEMINI_API_KEY;
     if (!apiKey) {
-      return NextResponse.json({ data: null, error: { code: 'CONFIG_ERROR', message: 'Gemini API key missing' } }, { status: 400 });
+      return NextResponse.json({ data: null, error: { code: 'CONFIG_ERROR', message: 'Gemini API key missing in both org settings and environment variables' } }, { status: 400 });
     }
 
     // Process card scan with Gemini Vision

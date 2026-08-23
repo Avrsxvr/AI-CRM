@@ -19,9 +19,9 @@ export async function GET(req: NextRequest) {
     }
 
     const settings = await SettingsService.getSettings(orgId);
-    const apiKey = settings.gemini_api_key;
+    const apiKey = settings.gemini_api_key || process.env.GEMINI_API_KEY;
     if (!apiKey) {
-      return NextResponse.json({ error: 'Gemini API key is not configured for this organization.' }, { status: 400 });
+      return NextResponse.json({ error: 'Gemini API key is not configured in settings or environment variables.' }, { status: 400 });
     }
 
     const supabase = await createClient();

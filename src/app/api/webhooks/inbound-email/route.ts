@@ -47,9 +47,9 @@ export async function POST(req: NextRequest) {
 
     // 3. Analyze and Draft using Gemini
     const settings = await SettingsService.getSettings(matchedLead.organization_id);
-    const apiKey = settings.gemini_api_key;
+    const apiKey = settings.gemini_api_key || process.env.GEMINI_API_KEY;
     if (!apiKey) {
-      throw new Error('Gemini API key is not configured for this organization.');
+      throw new Error('Gemini API key is not configured in settings or environment variables.');
     }
 
     const aiAnalysis = await ReplyHandlingAgent.analyzeAndDraft(apiKey, text, {

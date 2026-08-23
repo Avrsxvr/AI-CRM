@@ -1,12 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
+import { getCurrentUserOrgId } from '@/lib/auth';
+import { createClient } from '@/utils/supabase/server';
 
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     const { organizationId, userId, campaignId } = body;
 
-    if (!organizationId) {
+    let orgId = await getCurrentUserOrgId();
+    if (!orgId) orgId = organizationId; // Fallback to client-provided if not authenticated
+
+    if (!orgId) {
       return NextResponse.json(
         {
           data: null,
@@ -19,12 +24,15 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    
     // Insert a new lead record in 'capturing' state
     const { data: lead, error } = await supabaseAdmin
       .from('leads')
       .insert({
-        organization_id: organizationId,
-        captured_by: userId || null,
+        organization_id: orgId,
+        captured_by: user?.id || userId || null,
         status: 'capturing',
         contact_fields: {},
         context_summary: {},

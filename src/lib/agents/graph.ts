@@ -150,15 +150,22 @@ ${state.emailDraft.body}
   };
 
   try {
+    const isZohoConfigured = !!state.settings?.zoho_client_id;
+    const zohoClientId = isZohoConfigured ? state.settings?.zoho_client_id : process.env.ZOHO_CLIENT_ID;
+    const zohoClientSecret = isZohoConfigured ? state.settings?.zoho_client_secret : process.env.ZOHO_CLIENT_SECRET;
+    const zohoRefreshToken = isZohoConfigured ? state.settings?.zoho_refresh_token : process.env.ZOHO_REFRESH_TOKEN;
+    const zohoApiUrl = isZohoConfigured ? state.settings?.zoho_api_url : (process.env.ZOHO_API_URL || 'https://www.zohoapis.in');
+    const zohoAccountsUrl = isZohoConfigured ? state.settings?.zoho_accounts_url : (process.env.ZOHO_ACCOUNTS_URL || 'https://accounts.zoho.in');
+
     // Attempt Zoho if credentials exist
-    if (state.settings?.zoho_client_id && state.settings?.zoho_client_secret && state.settings?.zoho_refresh_token) {
+    if (zohoClientId && zohoClientSecret && zohoRefreshToken) {
       const zohoCredentials = {
         orgId: state.organizationId,
-        clientId: state.settings.zoho_client_id,
-        clientSecret: state.settings.zoho_client_secret,
-        refreshToken: state.settings.zoho_refresh_token,
-        apiUrl: state.settings.zoho_api_url,
-        accountsUrl: state.settings.zoho_accounts_url
+        clientId: zohoClientId,
+        clientSecret: zohoClientSecret,
+        refreshToken: zohoRefreshToken,
+        apiUrl: zohoApiUrl,
+        accountsUrl: zohoAccountsUrl
       };
       const zohoResult = await ZohoService.createLead(zohoCredentials, crmPayload);
       return {

@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { CampaignsRepository } from '@/lib/repositories/campaigns';
 import { createClient } from '@/utils/supabase/server';
+import { supabaseAdmin } from '@/lib/supabase';
 import { ZohoCampaignsService } from '@/lib/services/zohoCampaigns';
+
+export const dynamic = 'force-dynamic';
 
 export async function GET(
   req: NextRequest,
@@ -118,11 +121,14 @@ export async function GET(
       conversionRate: 0,
     };
 
+    const finalData = {
+      ...campaign,
+      analytics: mergedAnalytics
+    };
+    console.log(`Campaign ${campaignId} returning ${finalData.leads.length} leads.`);
+    
     return NextResponse.json({ 
-      data: {
-        ...campaign,
-        analytics: mergedAnalytics
-      }, 
+      data: finalData, 
       error: null 
     });
   } catch (error: any) {
@@ -142,7 +148,7 @@ export async function PUT(
     const resolvedParams = await params;
     const campaignId = resolvedParams.id;
     const body = await req.json();
-    const supabase = await createClient();
+    const supabase = supabaseAdmin;
     const updatedCampaign = await CampaignsRepository.updateCampaign(supabase, campaignId, body);
     return NextResponse.json({ data: updatedCampaign, error: null });
   } catch (error: any) {
@@ -161,7 +167,7 @@ export async function DELETE(
   try {
     const resolvedParams = await params;
     const campaignId = resolvedParams.id;
-    const supabase = await createClient();
+    const supabase = supabaseAdmin;
     await CampaignsRepository.archiveCampaign(supabase, campaignId);
     return NextResponse.json({ data: { success: true }, error: null });
   } catch (error: any) {

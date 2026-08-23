@@ -183,7 +183,7 @@ export default function LeadsDashboard() {
     setIsLoading(true);
     setError(null);
     try {
-      const response = await fetch(`/api/leads?status=${statusFilter}`);
+      const response = await fetch(`/api/leads?status=${statusFilter}&t=${Date.now()}`, { cache: 'no-store' });
       if (!response.ok) {
         throw new Error('Failed to load leads from database.');
       }

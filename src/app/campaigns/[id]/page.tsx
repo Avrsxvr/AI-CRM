@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import LeadList from '@/components/LeadList';
 import AnalyticsPanel from '@/components/AnalyticsPanel';
+import LeadDetailPanel from '@/components/LeadDetailPanel';
 
 export default function CampaignDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const resolvedParams = React.use(params);
@@ -36,11 +37,12 @@ export default function CampaignDetailPage({ params }: { params: Promise<{ id: s
   const [activeTab, setActiveTab] = useState<'existing' | 'new'>('existing');
   const [isOpenDetailsModalOpen, setIsOpenDetailsModalOpen] = useState<string | boolean>(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const [selectedLead, setSelectedLead] = useState<any | null>(null);
 
   const fetchCampaignDetails = async () => {
     setIsLoading(true);
     try {
-      const res = await fetch(`/api/campaigns/${campaignId}`);
+      const res = await fetch(`/api/campaigns/${campaignId}?t=${Date.now()}`, { cache: 'no-store' });
       const data = await res.json();
       if (data.error) throw new Error(data.error.message);
       setCampaign(data.data);
@@ -53,7 +55,7 @@ export default function CampaignDetailPage({ params }: { params: Promise<{ id: s
 
   const fetchAllLeads = async () => {
     try {
-      const res = await fetch('/api/leads');
+      const res = await fetch(`/api/leads?t=${Date.now()}`, { cache: 'no-store' });
       const data = await res.json();
       setAllLeads(data.data || []);
     } catch (err) {
@@ -104,12 +106,17 @@ export default function CampaignDetailPage({ params }: { params: Promise<{ id: s
   const removeLeadFromCampaign = async (leadId: string) => {
     if (!confirm('Remove this lead from the campaign?')) return;
     try {
-      await fetch(`/api/campaigns/${campaignId}/leads?lead_id=${leadId}`, {
+      const response = await fetch(`/api/campaigns/${campaignId}/leads?lead_id=${leadId}`, {
         method: 'DELETE'
       });
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error?.message || 'Failed to remove lead');
+      }
       await fetchCampaignDetails();
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error removing lead:', err);
+      alert('Error removing lead: ' + err.message);
     }
   };
 
@@ -242,8 +249,12 @@ export default function CampaignDetailPage({ params }: { params: Promise<{ id: s
           </div>
         ) : (
           <div className="bg-white border border-slate-200 shadow-sm rounded-xl rounded-3xl border border-slate-200 p-2">
-            {campaign.leads?.map((lead: any) => (
-              <div key={lead.id} className="p-4 flex items-center justify-between border-b border-slate-200 last:border-0 hover:bg-slate-50 transition-colors rounded-2xl group">
+            {campaign.leads?.map((lead: any, index: number) => (
+              <div 
+                key={lead.id || index} 
+                className="p-4 flex items-center justify-between border-b border-slate-200 last:border-0 hover:bg-slate-50 transition-colors rounded-2xl group cursor-pointer"
+                onClick={() => setSelectedLead(lead)}
+              >
                 <div className="flex items-center gap-4">
                   <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 font-bold text-sm">
                     {lead.contact_fields?.name?.charAt(0) || '?'}
@@ -258,7 +269,7 @@ export default function CampaignDetailPage({ params }: { params: Promise<{ id: s
                 <div className="flex-1 flex justify-center gap-3">
                   {(lead.zoho_analytics?.opens > 0 || (lead.context_summary?.open_count ?? 0) > 0) && (
                     <button 
-                      onClick={() => setIsOpenDetailsModalOpen(lead.id)}
+                      onClick={(e) => { e.stopPropagation(); setIsOpenDetailsModalOpen(lead.id); }}
                       className="flex items-center gap-1.5 text-slate-500 bg-white/5 px-2.5 py-1 rounded-lg border border-slate-200 hover:bg-white/10 hover:border-amber-500/30 hover:text-amber-400 transition-all cursor-pointer" 
                       title="View Email opens"
                     >
@@ -268,7 +279,7 @@ export default function CampaignDetailPage({ params }: { params: Promise<{ id: s
                   )}
                   {lead.zoho_analytics?.clicks > 0 && (
                     <button 
-                      onClick={() => setIsOpenDetailsModalOpen(lead.id)}
+                      onClick={(e) => { e.stopPropagation(); setIsOpenDetailsModalOpen(lead.id); }}
                       className="flex items-center gap-1.5 text-emerald-400 bg-emerald-500/10 px-2.5 py-1 rounded-lg border border-emerald-500/20 hover:bg-emerald-500/20 hover:border-emerald-500/40 transition-all cursor-pointer" 
                       title="View Links clicked"
                     >
@@ -280,7 +291,7 @@ export default function CampaignDetailPage({ params }: { params: Promise<{ id: s
 
                 <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                    <button 
-                    onClick={() => removeLeadFromCampaign(lead.id)}
+                    onClick={(e) => { e.stopPropagation(); removeLeadFromCampaign(lead.id); }}
                     className="p-2 bg-red-500/10 text-red-400 hover:bg-red-500/20 rounded-xl transition-colors"
                     title="Remove from campaign"
                    >
@@ -534,6 +545,14 @@ export default function CampaignDetailPage({ params }: { params: Promise<{ id: s
             </div>
           </div>
         </div>
+      )}
+
+      {selectedLead && (
+        <LeadDetailPanel 
+          lead={selectedLead} 
+          onClose={() => setSelectedLead(null)} 
+          onRefresh={fetchCampaignDetails} 
+        />
       )}
     </div>
   );

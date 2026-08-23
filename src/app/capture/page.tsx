@@ -7,7 +7,7 @@ import BulkCardScanner from '@/components/BulkCardScanner';
 import NotesScanner from '@/components/NotesScanner';
 import ExtractedFieldsForm from '@/components/ExtractedFieldsForm';
 import FollowupDraftEditor from '@/components/FollowupDraftEditor';
-import { Sparkles, CheckCircle2, ChevronRight, User, ShieldCheck, Play, Save, AlertCircle, Loader2 } from 'lucide-react';
+import { Sparkles, CheckCircle2, ChevronRight, User, ShieldCheck, Play, Save, AlertCircle, Loader2, Layers } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { OfflineStorage } from '@/lib/services/offline';
@@ -48,6 +48,7 @@ function CaptureDashboardContent() {
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [context, setContext] = useState<any>(null);
   const [extractedFields, setExtractedFields] = useState<ExtractedContact | null>(null);
+  const [bulkExtractedData, setBulkExtractedData] = useState<(ExtractedContact | null)[]>([]);
   const [emailDraft, setEmailDraft] = useState<{ subject: string; body: string } | null>(null);
   
   // Offline caching states
@@ -67,18 +68,21 @@ function CaptureDashboardContent() {
   const [showFieldsModal, setShowFieldsModal] = useState(false);
 
   const mockOrganizationId = process.env.NEXT_PUBLIC_ORGANIZATION_ID || '738de77c-ddd0-4a71-9d8d-3e346590ca0d';
-  const mockUserId = null;
 
   // Initialize DB if not already initialized
   const ensureLeadId = async () => {
     if (leadId) return leadId;
     try {
+      const { createClient } = await import('@/utils/supabase/client');
+      const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      
       const response = await fetch('/api/leads/recording/start', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           organizationId: mockOrganizationId, 
-          userId: mockUserId,
+          userId: user?.id || null,
           campaignId: campaignId || null
         }),
       });
@@ -182,6 +186,42 @@ function CaptureDashboardContent() {
     setQueueIndex(-1); // Waiting for user choice
   };
 
+  const startManualReview = async () => {
+    setCardProcessing(true);
+    try {
+      const delay = (ms: number) => new Promise(res => setTimeout(res, ms));
+      const results = [];
+      for (let i = 0; i < verificationQueue.length; i++) {
+        const base64 = verificationQueue[i];
+        try {
+          const response = await fetch('/api/leads/card-scan', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ image: base64 }),
+          });
+          if (response.ok) {
+            const result = await response.json();
+            results.push({ ...result.data, image: base64 });
+            
+            // Add a polite 2-second delay between requests to avoid rate limiting
+            if (i < verificationQueue.length - 1) {
+              await delay(2000);
+            }
+            continue;
+          }
+        } catch (e) {
+          console.warn('Batch OCR extraction error', e);
+        }
+        results.push({ name: '', company: '', title: '', email: '', phone: '', confidence: 0, image: base64 });
+      }
+      setBulkExtractedData(results);
+      setExtractedFields(results[0]);
+      setQueueIndex(0);
+    } finally {
+      setCardProcessing(false);
+    }
+  };
+
   const processCardForManualReview = async (index: number) => {
     if (index >= verificationQueue.length) {
       router.push(campaignId ? `/campaigns/${campaignId}` : '/leads');
@@ -200,31 +240,98 @@ function CaptureDashboardContent() {
       if (response.ok) {
         const result = await response.json();
         setExtractedFields({ ...result.data, image: verificationQueue[index] });
-        setShowFieldsModal(true);
+        if (mode !== 'bulk') {
+          setShowFieldsModal(true);
+        }
+      } else {
+        console.warn('OCR failed, falling back to manual entry');
+        setExtractedFields({ name: '', company: '', title: '', email: '', phone: '', confidence: 0, image: verificationQueue[index] });
+        if (mode !== 'bulk') {
+          setShowFieldsModal(true);
+        }
       }
     } catch (e) {
       console.error('Manual card processing failed:', e);
+      setExtractedFields({ name: '', company: '', title: '', email: '', phone: '', confidence: 0, image: verificationQueue[index] });
+      if (mode !== 'bulk') {
+        setShowFieldsModal(true);
+      }
     } finally {
       setCardProcessing(false);
     }
   };
 
-  const startManualReview = async () => {
-    setQueueIndex(0);
-    await processCardForManualReview(0);
+  const handleBulkNextCard = async (confirmedFields: ExtractedContact) => {
+    setCardProcessing(true);
+    try {
+      // 1. Initialize the new lead in the database
+      const createRes = await fetch('/api/leads', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          source: 'bulk-card-scan',
+          status: 'hot',
+        })
+      });
+      
+      const createData = await createRes.json();
+      const newLeadId = createData.data?.id;
+
+      if (newLeadId) {
+        // 2. Upload the card image and save the confirmed contact fields
+        await fetch(`/api/leads/${newLeadId}/save`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contactFields: confirmedFields,
+            cardImage: verificationQueue[queueIndex],
+            confidence: 1.0,
+            campaignId: campaignId || null,
+            exhibition: exhibition || null,
+            stall: stall || null
+          })
+        });
+      }
+
+      const nextIndex = queueIndex + 1;
+      if (nextIndex >= verificationQueue.length) {
+        // Finished all cards
+        router.push(campaignId ? `/campaigns/${campaignId}` : '/leads');
+        return;
+      }
+      
+      setQueueIndex(nextIndex);
+      // Instantly load next card from batch memory
+      setExtractedFields(bulkExtractedData[nextIndex]);
+    } catch (e) {
+      console.error('Error processing next card', e);
+    } finally {
+      setCardProcessing(false);
+    }
   };
 
   const handleNextInQueue = () => {
     setShowFieldsModal(false);
     const nextIndex = queueIndex + 1;
     setQueueIndex(nextIndex);
-    processCardForManualReview(nextIndex);
+    // Note: handleNextInQueue is legacy for the old single-card flow.
+    // If needed, it would process the next card here.
   };
 
   const startAutoSaveAll = async () => {
     setIsBulkAutoSaving(true);
     setBulkProgress({ processed: 0, total: verificationQueue.length, successes: 0, failures: 0 });
     
+    let currentUserId = null;
+    try {
+      const { createClient } = await import('@/utils/supabase/client');
+      const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      currentUserId = user?.id || null;
+    } catch (e) {
+      console.warn('Could not fetch user ID for bulk save:', e);
+    }
+
     for (let i = 0; i < verificationQueue.length; i++) {
       try {
         const base64 = verificationQueue[i];
@@ -243,7 +350,7 @@ function CaptureDashboardContent() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ 
             organizationId: mockOrganizationId, 
-            userId: mockUserId,
+            userId: currentUserId,
             campaignId: campaignId || null
           }),
         });
@@ -344,17 +451,22 @@ function CaptureDashboardContent() {
       return;
     }
 
-    if (leadId && extractedFields) {
+    let activeLeadId = leadId;
+    if (!activeLeadId) {
+      activeLeadId = await ensureLeadId();
+    }
+
+    if (activeLeadId) {
       setIsSaving(true);
       setSaveError(null);
       try {
-        const res = await fetch(`/api/leads/${leadId}/save`, {
+        const res = await fetch(`/api/leads/${activeLeadId}/save`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ 
-            contactFields: extractedFields,
-            cardImage: extractedFields.image || null,
-            confidence: typeof extractedFields.confidence === 'number' 
+            contactFields: extractedFields || {},
+            cardImage: extractedFields?.image || null,
+            confidence: typeof extractedFields?.confidence === 'number' 
               ? (extractedFields.confidence / 100) 
               : 1.0,
             campaignId: campaignId || null,
@@ -367,6 +479,7 @@ function CaptureDashboardContent() {
         if (verificationQueue.length > 0 && queueIndex >= 0) {
           handleNextInQueue();
         } else {
+          router.refresh(); // Clear Next.js router cache to show new lead instantly
           router.push(campaignId ? `/campaigns/${campaignId}` : '/leads');
         }
       } catch (e: any) {
@@ -474,7 +587,7 @@ function CaptureDashboardContent() {
           </div>
         </div>
       ) : (
-        <main className="flex-1 w-full max-w-6xl mx-auto z-10 flex flex-col justify-center gap-8 py-8 md:py-12">
+        <main className="flex-1 w-full max-w-[1800px] px-8 mx-auto z-10 flex flex-col justify-center gap-8 py-8 md:py-12">
           
           {/* Main Content Area - Beautiful Center Layout */}
           <div className="flex flex-col items-center justify-center w-full min-h-[400px]">
@@ -589,9 +702,42 @@ function CaptureDashboardContent() {
                         </div>
                       </div>
                     ) : (
-                      <div className="bg-white border border-slate-200 rounded-3xl p-8 text-center space-y-4 shadow-sm">
-                        <p className="text-sm font-bold text-slate-500 uppercase tracking-widest">Reviewing card {queueIndex + 1} of {verificationQueue.length}</p>
-                        {cardProcessing && <Loader2 className="w-10 h-10 text-blue-600 animate-spin mx-auto" />}
+                      <div className="w-full max-w-[1800px] mx-auto animate-in fade-in zoom-in-95 duration-500">
+                        <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm relative">
+                          <div className="flex items-center justify-between mb-8 pb-4 border-b border-slate-100">
+                            <h3 className="text-xl font-black text-slate-900 flex items-center gap-2 tracking-tight">
+                              <Layers className="w-6 h-6 text-blue-600" />
+                              Manual Verification
+                            </h3>
+                            <div className="bg-slate-100 text-slate-600 px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-widest">
+                              Card {queueIndex + 1} of {verificationQueue.length}
+                            </div>
+                          </div>
+                          
+                          {cardProcessing ? (
+                            <div className="py-24 text-center">
+                              <Loader2 className="w-12 h-12 text-blue-600 animate-spin mx-auto mb-4" />
+                              <p className="text-slate-500 font-medium animate-pulse">
+                                {queueIndex === -1 ? `Extracting data for ${verificationQueue.length} cards...` : 'Saving...'}
+                              </p>
+                            </div>
+                          ) : extractedFields ? (
+                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
+                              <div className="bg-slate-50 border border-slate-200 rounded-2xl p-2 flex items-center justify-center sticky top-6">
+                                <img src={verificationQueue[queueIndex]} className="max-w-full w-full rounded-xl object-contain max-h-[600px] shadow-sm" alt="Business Card" />
+                              </div>
+                              <div className="h-full">
+                                <ExtractedFieldsForm
+                                  initialFields={extractedFields}
+                                  onConfirm={handleBulkNextCard}
+                                  onCancel={() => router.push(campaignId ? `/campaigns/${campaignId}` : '/leads')}
+                                  submitLabel={queueIndex === verificationQueue.length - 1 ? "Save & Finish" : "Save & Next Card"}
+                                  cancelLabel="Exit Review"
+                                />
+                              </div>
+                            </div>
+                          ) : null}
+                        </div>
                       </div>
                     )}
                   </div>

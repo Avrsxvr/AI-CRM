@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/utils/supabase/server';
+import { supabaseAdmin } from '@/lib/supabase';
 
 export async function GET(req: NextRequest) {
   try {
@@ -30,7 +31,7 @@ export async function PUT(req: NextRequest) {
 
     // Update name in users table
     if (name !== undefined) {
-      const { error: dbError } = await supabase
+      const { error: dbError } = await supabaseAdmin
         .from('users')
         .update({ name })
         .eq('id', user.id);

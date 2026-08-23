@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { CampaignsRepository } from '@/lib/repositories/campaigns';
 import { getCurrentUserOrgId } from '@/lib/auth';
 import { createClient } from '@/utils/supabase/server';
+import { supabaseAdmin } from '@/lib/supabase';
+
+export const dynamic = 'force-dynamic';
 
 export async function GET(req: NextRequest) {
   try {
@@ -39,7 +42,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const supabase = await createClient();
+    const supabase = supabaseAdmin;
     const campaign = await CampaignsRepository.createCampaign(supabase, {
       organization_id: orgId,
       name,

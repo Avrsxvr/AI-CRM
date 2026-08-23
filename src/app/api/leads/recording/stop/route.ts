@@ -4,6 +4,7 @@ import { ContextMergeAgent } from '@/lib/agents/contextMerge';
 import { supabaseAdmin } from '@/lib/supabase';
 import { LeadsRepository } from '@/lib/repositories/leads';
 import { createClient } from '@/utils/supabase/server';
+import { getCurrentUserOrgId } from '@/lib/auth';
 import { SettingsService } from '@/lib/services/settings';
 
 /**
@@ -40,17 +41,20 @@ export async function POST(req: NextRequest) {
     const supabase = await createClient();
     const formData = await req.formData();
     const audioFile = formData.get('audio') as Blob | null;
-    const organizationId = formData.get('organizationId') as string | null;
+    let organizationId = await getCurrentUserOrgId();
+    if (!organizationId) {
+      organizationId = formData.get('organizationId') as string | null;
+    }
 
     if (!organizationId) {
       return NextResponse.json({ data: null, error: { code: 'VALIDATION_ERROR', message: 'organizationId is required' } }, { status: 400 });
     }
 
     const settings = await SettingsService.getSettings(organizationId);
-    const apiKey = settings.gemini_api_key;
+    const apiKey = settings.gemini_api_key || process.env.GEMINI_API_KEY;
 
     if (!apiKey) {
-      return NextResponse.json({ data: null, error: { code: 'CONFIG_ERROR', message: 'Gemini API key is missing in settings' } }, { status: 400 });
+      return NextResponse.json({ data: null, error: { code: 'CONFIG_ERROR', message: 'Gemini API key is missing in settings and environment variables' } }, { status: 400 });
     }
 
     if (!audioFile) {

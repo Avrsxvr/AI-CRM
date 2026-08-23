@@ -12,7 +12,8 @@ export async function POST(
     const { id } = await params;
     const body = await req.json();
     const { contactFields, cardImage, confidence, campaignId, exhibition, stall } = body;
-    const supabase = await createClient();
+    // Use admin client for all database operations to bypass RLS
+    const supabase = supabaseAdmin;
 
     // 0. Update event tracking (E1 S1 feature)
     if (exhibition || stall) {

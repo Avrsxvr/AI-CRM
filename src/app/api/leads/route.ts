@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/utils/supabase/server';
+import { supabaseAdmin } from '@/lib/supabase';
+
+export const dynamic = 'force-dynamic';
 
 export async function GET(req: NextRequest) {
   try {
@@ -7,6 +10,11 @@ export async function GET(req: NextRequest) {
     const statusFilter = searchParams.get('status');
 
     const supabase = await createClient();
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    
+    if (authError || !user) {
+      return NextResponse.json({ error: { message: 'Unauthorized' } }, { status: 401 });
+    }
     
     let query = supabase
       .from('leads')
@@ -17,7 +25,8 @@ export async function GET(req: NextRequest) {
         followups (id, sequence_position, channel, status, scheduled_for, sent_at, opened_at),
         crm_sync_log (id, target_system, status, error_message, synced_at)
       `)
-      .order('created_at', { ascending: false });
+      .order('created_at', { ascending: false })
+      .eq('captured_by', user.id);
 
     if (statusFilter && statusFilter !== 'all') {
       query = query.eq('status', statusFilter);
@@ -72,7 +81,7 @@ export async function POST(req: NextRequest) {
       status: body.status || 'new',
     };
 
-    const { data, error } = await supabase.from('leads').insert(newLead).select().single();
+    const { data, error } = await supabaseAdmin.from('leads').insert(newLead).select().single();
 
     if (error) throw new Error(error.message);
 
@@ -93,7 +102,7 @@ export async function PUT(req: NextRequest) {
       return NextResponse.json({ error: 'Lead ID is required' }, { status: 400 });
     }
 
-    const { data, error } = await supabase.from('leads').update(updateFields).eq('id', id).select().single();
+    const { data, error } = await supabaseAdmin.from('leads').update(updateFields).eq('id', id).select().single();
 
     if (error) throw new Error(error.message);
 
@@ -114,7 +123,9 @@ export async function DELETE(req: NextRequest) {
       return NextResponse.json({ error: 'Lead IDs array is required' }, { status: 400 });
     }
 
-    const { error } = await supabase.from('leads').delete().in('id', ids);
+    // Use admin client to bypass RLS and ensure cascade deletions work properly
+    const { supabaseAdmin } = await import('@/lib/supabase');
+    const { error } = await supabaseAdmin.from('leads').delete().in('id', ids);
 
     if (error) throw new Error(error.message);
 

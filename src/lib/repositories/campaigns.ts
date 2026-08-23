@@ -85,10 +85,13 @@ export class CampaignsRepository {
 
     return {
       ...campaign,
-      leads: leads.map(cl => ({
-        ...cl.leads,
-        campaign_added_at: cl.added_at
-      }))
+      leads: leads
+        .filter(cl => cl && cl.leads) // extra safety check
+        .map(cl => ({
+          ...(cl.leads || {}),
+          id: cl.lead_id, // Force the ID to be present from the pivot table
+          campaign_added_at: cl.added_at
+        }))
     };
   }
 

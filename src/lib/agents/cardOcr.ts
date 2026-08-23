@@ -43,23 +43,45 @@ export class CardOcrAgent {
 
     const prompt = `Extract the contact details from this business card image and return ONLY valid JSON with these exact keys: name, company, title, email, phone, confidence_score. Use null for any field that is not visible on the card. confidence_score should be a number from 0 to 100.`;
 
-    try {
-      const result = await model.generateContent([prompt, imagePart]);
-      const text = result.response.text();
-      // Strip markdown code fences if present
-      const cleaned = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-      const parsed = JSON.parse(cleaned);
-      return parsed as CardOcrOutput;
-    } catch (error) {
-      console.error('Error in Card OCR Agent (Gemini):', error);
-      return {
-        name: null,
-        company: null,
-        title: null,
-        email: null,
-        phone: null,
-        confidence_score: 0.0,
-      };
+    let attempts = 0;
+    const maxAttempts = 3;
+    const delay = (ms: number) => new Promise((res) => setTimeout(res, ms));
+
+    while (attempts < maxAttempts) {
+      try {
+        const result = await model.generateContent([prompt, imagePart]);
+        const text = result.response.text();
+        // Strip markdown code fences if present
+        const cleaned = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+        const parsed = JSON.parse(cleaned);
+        return parsed as CardOcrOutput;
+      } catch (error: any) {
+        attempts++;
+        console.warn(`OCR attempt ${attempts} failed:`, error.message || error);
+        
+        const isRateLimit = error.status === 429 || 
+                           (error.message && (error.message.includes('429') || error.message.includes('Quota exceeded') || error.message.includes('Too Many Requests')));
+                           
+        if (isRateLimit && attempts < maxAttempts) {
+          const waitTime = attempts * 5000; // 5s, 10s backoff
+          console.log(`Rate limited by Gemini. Waiting ${waitTime/1000}s before retrying...`);
+          await delay(waitTime);
+          continue;
+        }
+
+        console.error('Final error in Card OCR Agent (Gemini):', error);
+        return {
+          name: null,
+          company: null,
+          title: null,
+          email: null,
+          phone: null,
+          confidence_score: 0.0,
+        };
+      }
     }
+    
+    // Fallback if loop exits
+    return { name: null, company: null, title: null, email: null, phone: null, confidence_score: 0.0 };
   }
 }

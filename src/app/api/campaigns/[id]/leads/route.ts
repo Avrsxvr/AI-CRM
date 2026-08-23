@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { CampaignsRepository } from '@/lib/repositories/campaigns';
 import { createClient } from '@/utils/supabase/server';
+import { supabaseAdmin } from '@/lib/supabase';
 
 export async function POST(
   req: NextRequest,
@@ -50,8 +51,8 @@ export async function DELETE(
       );
     }
 
-    const supabase = await createClient();
-    await CampaignsRepository.removeLeadFromCampaign(supabase, campaignId, leadId);
+    // Use admin client to bypass RLS which silently ignores deletes for regular users
+    await CampaignsRepository.removeLeadFromCampaign(supabaseAdmin, campaignId, leadId);
 
     return NextResponse.json({ data: { success: true }, error: null });
   } catch (error: any) {
