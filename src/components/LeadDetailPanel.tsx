@@ -118,7 +118,7 @@ export default function LeadDetailPanel({ lead, onClose, onRefresh }: LeadDetail
     });
 
     // 6. Opens (real-time from followups)
-    followups.forEach((touch) => {
+    followups.forEach((touch: any) => {
       if (touch.status === 'opened' && touch.opened_at) {
         events.push({
           title: `Touch ${touch.sequence_position} Email Opened`,

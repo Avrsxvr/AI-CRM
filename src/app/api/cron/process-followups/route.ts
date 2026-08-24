@@ -109,7 +109,7 @@ export async function GET(req: NextRequest) {
         const dynamicAppUrl = `${protocol}://${host}`;
 
         // 4. Send Email
-        const email = contactFields.email || 'avrsmain@gmail.com';
+        const recipientEmail = contactFields.email || 'avrsmain@gmail.com';
         const name = contactFields.name || 'Valued Customer';
         const zohoCampaignKey = process.env.ZOHO_CAMPAIGN_KEY;
 
@@ -117,7 +117,7 @@ export async function GET(req: NextRequest) {
 
         if (zohoCampaignKey) {
           console.log(`Dispatching followup ${sequencePosition} via Zoho Campaigns...`);
-          await ZohoCampaignsService.triggerEmail(zohoCampaignKey, email, name, body);
+          await ZohoCampaignsService.triggerEmail(zohoCampaignKey, recipientEmail, name, body);
         } else {
           const emailCredentials = {
             user: settings.email_user || process.env.EMAIL_USER || process.env.EMAIL_FROM_ADDRESS || 'onboarding@resend.dev',
@@ -127,7 +127,7 @@ export async function GET(req: NextRequest) {
 
           messageId = await EmailService.sendEmail(
             emailCredentials,
-            email,
+            recipientEmail,
             subject,
             body,
             lead.id,
