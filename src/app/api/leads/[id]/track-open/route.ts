@@ -4,6 +4,8 @@ import { ZohoService } from '@/lib/services/zoho';
 import { ZohoCampaignsService } from '@/lib/services/zohoCampaigns';
 import { SettingsService } from '@/lib/services/settings';
 
+export const dynamic = 'force-dynamic';
+
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }

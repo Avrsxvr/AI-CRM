@@ -72,7 +72,7 @@ export class EmailService {
 
     // Append 1x1 transparent tracking pixel if leadId is provided (Spam-filter safe)
     if (leadId) {
-      const finalAppUrl = appUrl || process.env.NEXT_PUBLIC_APP_URL || 'https://amma.vercel.app';
+      const finalAppUrl = appUrl || process.env.NEXT_PUBLIC_APP_URL || 'https://apexora-ai.vercel.app';
       const trackingUrl = `${finalAppUrl}/api/leads/${leadId}/track-open${touchPosition ? `?touch=${touchPosition}` : ''}`;
       htmlBody += `<br /><img src="${trackingUrl}" width="1" height="1" alt="" border="0" style="display:block; opacity:0.01;" />`;
     }
