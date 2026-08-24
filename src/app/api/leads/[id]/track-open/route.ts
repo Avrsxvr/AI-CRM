@@ -177,6 +177,7 @@ export async function GET(
         'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
         'Pragma': 'no-cache',
         'Expires': '0',
+        'X-Debug-FetchError': fetchError ? (fetchError.message || JSON.stringify(fetchError)) : 'none',
       },
     });
   } catch (error) {
@@ -188,6 +189,7 @@ export async function GET(
       headers: {
         'Content-Type': 'image/gif',
         'Content-Length': gifBuffer.length.toString(),
+        'X-Debug-Error': error instanceof Error ? error.message : String(error),
       },
     });
   }
