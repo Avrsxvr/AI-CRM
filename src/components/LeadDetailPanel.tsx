@@ -812,12 +812,17 @@ export default function LeadDetailPanel({ lead, onClose, onRefresh }: LeadDetail
               Detailed Open History
             </h4>
             <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1">
-              {[...context.open_history].reverse().map((event: any, i: number) => (
-                <div key={i} className="flex justify-between items-center text-[11px] py-1.5 px-3 bg-slate-50/50 rounded-lg border border-slate-200/60">
-                  <span className="font-semibold text-slate-700">Touch {event.touch === '1' ? '1' : event.touch}</span>
-                  <span className="text-slate-500 font-mono tracking-tight">{new Date(event.timestamp).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</span>
-                </div>
-              ))}
+              {[...context.open_history].reverse().map((event: any, i: number) => {
+                const openNumber = context.open_history.length - i;
+                return (
+                  <div key={i} className="flex justify-between items-center text-[11px] py-1.5 px-3 bg-slate-50/50 rounded-lg border border-slate-200/60">
+                    <span className="font-semibold text-slate-700">
+                      Open {openNumber} <span className="text-slate-400 font-normal">(Touch {event.touch === '1' ? '1' : event.touch})</span>
+                    </span>
+                    <span className="text-slate-500 font-mono tracking-tight">{new Date(event.timestamp).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</span>
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}
