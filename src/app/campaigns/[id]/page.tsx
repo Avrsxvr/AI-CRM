@@ -492,6 +492,32 @@ export default function CampaignDetailPage({ params }: { params: Promise<{ id: s
                   );
                 }
 
+                // If it's a specific lead with Internal Pixel Tracking (Vercel)
+                if (targetLead && !targetLead.zoho_analytics && targetLead.context_summary?.open_history) {
+                  const history = targetLead.context_summary.open_history;
+                  return (
+                    <div className="space-y-4">
+                      <div className="p-4 rounded-2xl bg-slate-800/10 border border-blue-500/20">
+                        <h4 className="font-bold text-slate-900 text-sm mb-1">{targetLead.contact_fields?.name}</h4>
+                        <p className="text-xs text-slate-500">{targetLead.contact_fields?.email}</p>
+                      </div>
+
+                      <h4 className="text-xs font-bold text-slate-500 uppercase tracking-widest mt-6 mb-2">Opens ({targetLead.context_summary.open_count || 0})</h4>
+                      {history.length > 0 ? [...history].reverse().map((open: any, i: number) => {
+                        const openNumber = history.length - i;
+                        return (
+                          <div key={`open-${i}`} className="p-3 rounded-xl bg-white/5 border border-slate-200 flex justify-between items-center">
+                            <span className="text-xs text-slate-700">Open {openNumber} <span className="text-slate-400 font-normal">(Touch {open.touch})</span></span>
+                            <span className="text-xs font-bold text-amber-400">
+                              {new Date(open.timestamp).toLocaleString()}
+                            </span>
+                          </div>
+                        );
+                      }) : <p className="text-xs text-zinc-600">No detailed open timestamps.</p>}
+                    </div>
+                  );
+                }
+
                 // Fallback to Global / Local DB Open Details
                 const openDetails = campaign.analytics?.openDetails || [];
                 if (openDetails.length === 0) {

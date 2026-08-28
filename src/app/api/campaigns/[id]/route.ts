@@ -39,8 +39,8 @@ export async function GET(
         .in('lead_id', leadIds);
 
       if (followups) {
-        analytics.sent = followups.filter(f => f.status === 'sent').length;
-        const openedFollowups = followups.filter(f => f.opened === true);
+        analytics.sent = followups.filter(f => f.status === 'sent' || f.status === 'opened').length;
+        const openedFollowups = followups.filter(f => f.status === 'opened' || f.opened === true);
         analytics.opened = openedFollowups.length;
 
         analytics.openDetails = openedFollowups.map(f => {
