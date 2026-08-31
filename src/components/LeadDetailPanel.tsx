@@ -724,41 +724,66 @@ export default function LeadDetailPanel({ lead, onClose, onRefresh }: LeadDetail
               Drip Nurture Sequence
             </h4>
             <div className="relative border-l border-slate-200 ml-2.5 pl-4 space-y-4 text-xs">
-              {followups
-                .sort((a: any, b: any) => a.sequence_position - b.sequence_position)
-                .map((touch: any) => {
+              {(() => {
+                const maxTouch = Math.max(...followups.map((f: any) => f.sequence_position || 1));
+                const isHalted = followups.some((f: any) => f.status === 'paused_adaptive');
+                const isFailed = followups.some((f: any) => f.status === 'send_failed');
+                
+                const projectedFollowups = [...followups];
+                
+                // Add projected future touches up to 4 if the sequence isn't halted/failed
+                if (!isHalted && !isFailed && maxTouch < 4) {
+                  for (let i = maxTouch + 1; i <= 4; i++) {
+                    const lastTouch = projectedFollowups[projectedFollowups.length - 1];
+                    const baseDate = lastTouch?.scheduled_for || lastTouch?.sent_at || new Date().toISOString();
+                    const projectedDate = new Date(new Date(baseDate).getTime() + (3 * 24 * 60 * 60 * 1000)).toISOString();
+                    
+                    projectedFollowups.push({
+                      id: `projected-${i}`,
+                      sequence_position: i,
+                      status: 'projected',
+                      scheduled_for: projectedDate
+                    });
+                  }
+                }
+                
+                return projectedFollowups
+                  .sort((a: any, b: any) => a.sequence_position - b.sequence_position)
+                  .map((touch: any) => {
                   const isSent = touch.status === 'sent';
                   const isFailed = touch.status === 'send_failed';
                   const isSending = touch.status === 'sending';
+                  const isProjected = touch.status === 'projected';
                   const dateStr = touch.sent_at 
                     ? new Date(touch.sent_at).toLocaleDateString()
                     : new Date(touch.scheduled_for).toLocaleDateString();
 
                   return (
-                    <div key={touch.id} className="relative">
+                    <div key={touch.id} className={`relative ${isProjected ? 'opacity-50 grayscale' : ''}`}>
                       {/* Timeline dot */}
                       <span className={`absolute -left-[21.5px] top-1 w-2.5 h-2.5 rounded-full border border-zinc-950 ${
-                        isSent ? 'bg-emerald-400' : isFailed ? 'bg-red-400' : isSending ? 'bg-indigo-400 animate-pulse' : touch.status === 'paused_adaptive' ? 'bg-amber-400' : 'bg-zinc-700'
+                        isSent ? 'bg-emerald-400' : isFailed ? 'bg-red-400' : isSending ? 'bg-indigo-400 animate-pulse' : touch.status === 'paused_adaptive' ? 'bg-amber-400' : isProjected ? 'bg-transparent border-dashed border-slate-300' : 'bg-zinc-700'
                       }`}></span>
 
                       <div className="flex items-center justify-between mb-0.5">
                         <span className="font-semibold text-zinc-200">
-                          Touch {touch.sequence_position} {touch.sequence_position === 1 ? '(1-Hour follow-up)' : `(Day ${(touch.sequence_position - 1) * 14})`}
+                          Touch {touch.sequence_position} {touch.sequence_position === 1 ? '(1-Hour follow-up)' : `(Day ${(touch.sequence_position - 1) * 3})`}
                         </span>
                         <span className={`text-[9px] px-1.5 py-0.5 rounded capitalize ${
-                          isSent ? 'bg-emerald-500/10 text-emerald-400' : isFailed ? 'bg-red-500/10 text-red-400' : isSending ? 'bg-slate-800/10 text-slate-600' : touch.status === 'paused_adaptive' ? 'bg-amber-500/10 text-amber-400' : 'bg-slate-100 text-slate-400'
+                          isSent ? 'bg-emerald-500/10 text-emerald-400' : isFailed ? 'bg-red-500/10 text-red-400' : isSending ? 'bg-slate-800/10 text-slate-600' : touch.status === 'paused_adaptive' ? 'bg-amber-500/10 text-amber-400' : isProjected ? 'bg-slate-50 border border-slate-200 border-dashed text-slate-400' : 'bg-slate-100 text-slate-400'
                         }`}>
-                          {touch.status === 'paused_adaptive' ? '⏸ Paused — Hot Lead' : touch.status}
+                          {touch.status === 'paused_adaptive' ? '⏸ Paused — Hot Lead' : isProjected ? 'Lined Up' : touch.status}
                         </span>
                       </div>
                       
                       <div className="flex items-center gap-1 text-[10px] text-slate-400">
                         {isSent ? <CheckCircle className="w-3 h-3 text-emerald-500" /> : <Clock className="w-3 h-3" />}
-                        <span>{isSent ? 'Sent on' : 'Scheduled for'}: {dateStr}</span>
+                        <span>{isSent ? 'Sent on' : isProjected ? 'Expected' : 'Scheduled for'}: {dateStr}</span>
                       </div>
                     </div>
                   );
-                })}
+                });
+              })()}
             </div>
           </div>
         )}

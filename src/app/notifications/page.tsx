@@ -15,10 +15,20 @@ export default function NotificationsInboxPage() {
   const fetchNotifications = async () => {
     try {
       const res = await fetch('/api/notifications');
+      
+      const contentType = res.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        const text = await res.text();
+        console.error('Invalid content type received:', contentType, text.substring(0, 100));
+        setNotifications([]);
+        return;
+      }
+      
       const data = await res.json();
       setNotifications(data.data || []);
     } catch (err) {
-      console.error(err);
+      console.error('Fetch error:', err);
+      setNotifications([]);
     } finally {
       setIsLoading(false);
     }
@@ -74,25 +84,37 @@ export default function NotificationsInboxPage() {
   };
 
   return (
-    <div className="min-h-screen bg-white text-slate-900 p-8 md:pl-24">
-      <div className="max-w-4xl mx-auto">
+    <div className="min-h-screen bg-[#f8fafc] text-slate-900 p-8 md:pl-24 relative overflow-hidden flex flex-col items-center">
+      {/* Premium Background Elements */}
+      <div className="absolute top-0 left-1/4 w-[500px] h-[500px] bg-rose-600/5 rounded-full blur-[120px] pointer-events-none"></div>
+      <div className="absolute bottom-0 right-1/4 w-[500px] h-[500px] bg-indigo-600/5 rounded-full blur-[100px] pointer-events-none"></div>
+
+      <div className="w-full max-w-4xl mx-auto z-10 flex flex-col h-full animate-in fade-in slide-in-from-bottom-8 duration-700">
         <header className="mb-8 flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-black text-slate-900 flex items-center gap-3 tracking-tight">
-              <Bell className="w-8 h-8 text-rose-500" />
+              <div className="w-12 h-12 bg-rose-100 rounded-2xl flex items-center justify-center text-rose-600 shadow-inner">
+                <Bell className="w-6 h-6" />
+              </div>
               Unified Inbox
             </h1>
-            <p className="text-slate-500 mt-2">Manage incoming replies and AI-drafted responses.</p>
+            <p className="text-slate-500 mt-2 ml-1">Manage incoming replies and AI-drafted responses.</p>
           </div>
         </header>
 
         {isLoading ? (
-          <div className="text-center text-slate-400 mt-20">Loading inbox...</div>
+          <div className="flex-1 flex flex-col items-center justify-center mt-32 space-y-4">
+            <div className="w-12 h-12 border-4 border-rose-100 border-t-rose-500 rounded-full animate-spin"></div>
+            <p className="text-sm font-bold text-slate-400 uppercase tracking-widest animate-pulse">Checking for replies...</p>
+          </div>
         ) : notifications.length === 0 ? (
-          <div className="bg-white border border-slate-200 shadow-sm rounded-xl rounded-3xl p-16 text-center flex flex-col items-center">
-            <CheckCircle2 className="w-12 h-12 text-emerald-500 mb-4" />
-            <h3 className="text-xl font-bold text-slate-900 mb-2">Inbox Zero</h3>
-            <p className="text-slate-500">You're all caught up on replies and alerts.</p>
+          <div className="mt-20 w-full max-w-lg mx-auto bg-white/60 backdrop-blur-xl border border-slate-200/60 shadow-xl rounded-[2rem] p-16 text-center flex flex-col items-center relative overflow-hidden group hover:shadow-2xl hover:border-emerald-200 transition-all duration-500">
+            <div className="absolute inset-0 bg-gradient-to-br from-emerald-50 to-teal-50 opacity-0 group-hover:opacity-100 transition-opacity duration-500 -z-10"></div>
+            <div className="w-24 h-24 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mb-6 shadow-inner relative z-10 animate-bounce">
+              <CheckCircle2 className="w-12 h-12" />
+            </div>
+            <h3 className="text-2xl font-black text-slate-900 mb-3 tracking-tight z-10">Inbox Zero</h3>
+            <p className="text-slate-500 text-sm font-medium z-10">You're all caught up on replies and alerts. Great job!</p>
           </div>
         ) : (
           <div className="space-y-4">

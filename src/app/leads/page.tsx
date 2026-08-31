@@ -183,7 +183,8 @@ export default function LeadsDashboard() {
     setIsLoading(true);
     setError(null);
     try {
-      const response = await fetch(`/api/leads?status=${statusFilter}&t=${Date.now()}`, { cache: 'no-store' });
+      // Fetch all leads so global metrics remain accurate across filters
+      const response = await fetch(`/api/leads?status=all&t=${Date.now()}`, { cache: 'no-store' });
       if (!response.ok) {
         throw new Error('Failed to load leads from database.');
       }
@@ -276,8 +277,11 @@ export default function LeadsDashboard() {
 
   useEffect(() => {
     fetchLeads();
-    setSearchQuery(''); // BUG 6 FIX: Reset search when filter tab changes
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    setSearchQuery(''); // Reset search when filter tab changes
   }, [statusFilter]);
 
   useEffect(() => {
@@ -332,8 +336,17 @@ export default function LeadsDashboard() {
 
   const filteredLeads = React.useMemo(() => {
     let list = leads;
-    if (statusFilter === 'hot') list = leads.filter(l => l.context_summary?.is_hot === true);
     
+    // Apply status filter
+    if (statusFilter !== 'all') {
+      if (statusFilter === 'hot') {
+        list = list.filter(l => l.context_summary?.is_hot === true);
+      } else {
+        list = list.filter(l => l.status === statusFilter);
+      }
+    }
+    
+    // Apply search query
     list = list.filter((lead) => {
       const contact = lead.contact_fields || {};
       const name = (contact.name || '').toLowerCase();

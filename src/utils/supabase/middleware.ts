@@ -46,6 +46,12 @@ export async function updateSession(request: NextRequest) {
     request.nextUrl.pathname.includes('/track-open');
 
   if (!user && !isPublicRoute) {
+    // If it is an API route, return 401 Unauthorized JSON instead of HTML redirect
+    // This prevents `fetch().json()` from throwing SyntaxError when sessions expire
+    if (request.nextUrl.pathname.startsWith('/api/')) {
+      return NextResponse.json({ error: { message: 'Unauthorized: Session expired' } }, { status: 401 });
+    }
+
     // no user, potentially respond by redirecting the user to the login page
     const url = request.nextUrl.clone()
     url.pathname = '/login'
