@@ -3,30 +3,69 @@ export class ZohoCampaignsService {
     return process.env.ZOHO_CAMPAIGNS_API_URL || 'https://campaigns.zoho.com/api/v1.1';
   }
 
-  /**
-   * Refreshes the Zoho token (reuses logic or needs a different scope).
-   * For this implementation, we assume the token is fetched similarly to CRM or provided directly.
-   */
-  private static async getAccessToken(): Promise<string> {
-    // In a real scenario, this would use the refresh token with the campaigns scope
-    // 'ZohoCampaigns.campaign.ALL'
-    // We will simulate the token retrieval for now, or use the CRM token if it shares scopes.
-    const token = process.env.ZOHO_CAMPAIGNS_TOKEN || 'dummy-campaigns-token';
-    return token;
+  private static tokenCache: Record<string, { accessToken: string; tokenExpiry: number }> = {};
+
+  private static async getAccessToken(
+    orgId: string,
+    clientId: string,
+    clientSecret: string,
+    refreshToken: string,
+    accountsUrl: string = 'https://accounts.zoho.com'
+  ): Promise<string> {
+    const now = Date.now();
+    const cached = this.tokenCache[orgId];
+    if (cached && now < cached.tokenExpiry - 60000) {
+      return cached.accessToken;
+    }
+
+    if (!clientId || !clientSecret || !refreshToken) {
+      throw new Error('Zoho Campaigns credentials (clientId, clientSecret, refreshToken) are missing.');
+    }
+
+    const params = new URLSearchParams({
+      grant_type: 'refresh_token',
+      client_id: clientId,
+      client_secret: clientSecret,
+      refresh_token: refreshToken,
+    });
+
+    const tokenUrl = `${accountsUrl}/oauth/v2/token?${params.toString()}`;
+
+    const response = await fetch(tokenUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to refresh Zoho Campaigns access token: ${await response.text()}`);
+    }
+
+    const data = await response.json();
+    if (!data.access_token) {
+      throw new Error('Zoho token response did not contain access_token');
+    }
+
+    this.tokenCache[orgId] = {
+      accessToken: data.access_token,
+      tokenExpiry: Date.now() + (data.expires_in * 1000)
+    };
+
+    return data.access_token;
   }
 
   /**
    * Pushes lead engagement data to Zoho Campaigns.
    */
   public static async pushEngagement(
+    credentials: { orgId: string; clientId: string; clientSecret: string; refreshToken: string; accountsUrl?: string; campaignsApiUrl?: string },
     email: string,
     campaignName: string,
     action: 'opened' | 'clicked',
     details: string
   ): Promise<boolean> {
     try {
-      const token = await this.getAccessToken();
-      const apiUrl = `${this.getApiUrl()}/updateContactActivity`;
+      const token = await this.getAccessToken(credentials.orgId, credentials.clientId, credentials.clientSecret, credentials.refreshToken, credentials.accountsUrl);
+      const apiUrl = `${credentials.campaignsApiUrl || this.getApiUrl()}/updateContactActivity`;
 
       const params = new URLSearchParams({
         resfmt: 'JSON',
@@ -62,14 +101,15 @@ export class ZohoCampaignsService {
    * Triggers an email dispatch using Zoho Campaigns Transmission API
    */
   public static async triggerEmail(
+    credentials: { orgId: string; clientId: string; clientSecret: string; refreshToken: string; accountsUrl?: string; campaignsApiUrl?: string },
     campaignKey: string,
     recipientEmail: string,
     recipientName: string,
     customBody: string
   ): Promise<boolean> {
     try {
-      const token = await this.getAccessToken();
-      const apiUrl = `${this.getApiUrl()}/json/transmission`;
+      const token = await this.getAccessToken(credentials.orgId, credentials.clientId, credentials.clientSecret, credentials.refreshToken, credentials.accountsUrl);
+      const apiUrl = `${credentials.campaignsApiUrl || this.getApiUrl()}/json/transmission`;
 
       // Structure for Zoho Campaigns transmission
       const payload = {
@@ -108,14 +148,14 @@ export class ZohoCampaignsService {
   /**
    * Fetches aggregate campaign statistics (sent, opened, clicked) from Zoho Campaigns.
    */
-  public static async fetchCampaignAnalytics(campaignName: string) {
+  public static async fetchCampaignAnalytics(
+    credentials: { orgId: string; clientId: string; clientSecret: string; refreshToken: string; accountsUrl?: string; campaignsApiUrl?: string },
+    campaignName: string
+  ) {
     try {
-      const token = await this.getAccessToken();
-      // Zoho Campaigns API to get campaign summary. 
-      // First we need to search for the campaign to get its key, then get its summary.
-      // We assume ZOHO_CAMPAIGNS_API_URL is the base v1.1 API
+      const token = await this.getAccessToken(credentials.orgId, credentials.clientId, credentials.clientSecret, credentials.refreshToken, credentials.accountsUrl);
       
-      const searchUrl = `${this.getApiUrl()}/getCampaigns?resfmt=JSON&status=sent`;
+      const searchUrl = `${credentials.campaignsApiUrl || this.getApiUrl()}/getCampaigns?resfmt=JSON&status=sent`;
       const searchResponse = await fetch(searchUrl, {
         method: 'GET',
         headers: {
@@ -155,7 +195,7 @@ export class ZohoCampaignsService {
       const campaignKey = matchedCampaign.campaign_key;
 
       // Now fetch the specific summary for this campaign
-      const summaryUrl = `${this.getApiUrl()}/getCampaignSummary?resfmt=JSON&campaign_key=${campaignKey}`;
+      const summaryUrl = `${credentials.campaignsApiUrl || this.getApiUrl()}/getCampaignSummary?resfmt=JSON&campaign_key=${campaignKey}`;
       const summaryResponse = await fetch(summaryUrl, {
         method: 'GET',
         headers: {
@@ -200,10 +240,14 @@ export class ZohoCampaignsService {
   /**
    * Fetches granular recipient data (opens or clicks) for a specific campaign.
    */
-  public static async fetchCampaignRecipients(campaignKey: string, type: 'open' | 'click') {
+  public static async fetchCampaignRecipients(
+    credentials: { orgId: string; clientId: string; clientSecret: string; refreshToken: string; accountsUrl?: string; campaignsApiUrl?: string },
+    campaignKey: string,
+    type: 'open' | 'click'
+  ) {
     try {
-      const token = await this.getAccessToken();
-      const url = `${this.getApiUrl()}/getcampaignrecipientsdata?resfmt=JSON&campaignkey=${campaignKey}&type=${type}`;
+      const token = await this.getAccessToken(credentials.orgId, credentials.clientId, credentials.clientSecret, credentials.refreshToken, credentials.accountsUrl);
+      const url = `${credentials.campaignsApiUrl || this.getApiUrl()}/getCampaign${type === 'open' ? 'Opened' : 'Clicked'}Details?resfmt=JSON&campaign_key=${campaignKey}`;
       
       const response = await fetch(url, {
         method: 'GET',
@@ -213,7 +257,6 @@ export class ZohoCampaignsService {
       });
 
       if (!response.ok) {
-        console.warn(`Failed to fetch ${type} data for campaign ${campaignKey}:`, await response.text());
         return [];
       }
 
@@ -222,29 +265,23 @@ export class ZohoCampaignsService {
       try {
         data = JSON.parse(rawData);
       } catch (e) {
-        console.warn(`Zoho Campaigns returned non-JSON for ${type} recipients:`, rawData);
         return [];
       }
       
-      // Zoho typically returns the list of contacts under something like `campaign_recipients` or `recent_activities`
-      // We will parse the response robustly
       if (data && data.response && data.response.result && data.response.result.campaign_recipients) {
         return data.response.result.campaign_recipients;
       }
       
-      // Alternative fallback if structure varies
       if (data.campaign_recipients) {
         return data.campaign_recipients;
       }
 
-      // If data is an array directly
       if (Array.isArray(data)) {
         return data;
       }
 
       return [];
     } catch (error) {
-      console.error(`Error fetching Zoho Campaigns ${type} recipients:`, error);
       return [];
     }
   }

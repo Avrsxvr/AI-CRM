@@ -304,7 +304,7 @@ export default function SettingsPage() {
                 </div>
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-700">API URL</label>
+                <label className="block text-sm font-medium text-slate-700">CRM API URL</label>
                 <div className="mt-1">
                   <input
                     type="text"
@@ -312,7 +312,7 @@ export default function SettingsPage() {
                     value={settings.zoho_api_url || ''}
                     onChange={handleChange}
                     className="block w-full rounded-md border border-slate-300 bg-white px-4 py-2 text-slate-900 focus:border-blue-500 focus:ring-blue-500 sm:text-sm shadow-sm"
-                    placeholder="https://www.zohoapis.com"
+                    placeholder="https://www.zohoapis.in"
                   />
                 </div>
               </div>
@@ -325,9 +325,39 @@ export default function SettingsPage() {
                     value={settings.zoho_accounts_url || ''}
                     onChange={handleChange}
                     className="block w-full rounded-md border border-slate-300 bg-white px-4 py-2 text-slate-900 focus:border-blue-500 focus:ring-blue-500 sm:text-sm shadow-sm"
-                    placeholder="https://accounts.zoho.com"
+                    placeholder="https://accounts.zoho.in"
                   />
                 </div>
+              </div>
+              <div className="sm:col-span-2 pt-4 border-t border-slate-100">
+                <h3 className="text-sm font-semibold text-slate-800 mb-4">Zoho Campaigns (Email Dispatch & Analytics)</h3>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700">Campaigns API URL</label>
+                <div className="mt-1">
+                  <input
+                    type="text"
+                    name="zoho_campaigns_api_url"
+                    value={settings.zoho_campaigns_api_url || ''}
+                    onChange={handleChange}
+                    className="block w-full rounded-md border border-slate-300 bg-white px-4 py-2 text-slate-900 focus:border-blue-500 focus:ring-blue-500 sm:text-sm shadow-sm"
+                    placeholder="https://campaigns.zoho.in/api/v1.1"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700">Target Campaign Key</label>
+                <div className="mt-1">
+                  <input
+                    type="text"
+                    name="zoho_campaign_key"
+                    value={settings.zoho_campaign_key || ''}
+                    onChange={handleChange}
+                    className="block w-full rounded-md border border-slate-300 bg-white px-4 py-2 text-slate-900 focus:border-blue-500 focus:ring-blue-500 sm:text-sm shadow-sm"
+                    placeholder="Found in Zoho Campaigns Dashboard"
+                  />
+                </div>
+                <p className="mt-2 text-xs text-slate-500">If provided, the AI CRM will send emails via Zoho Campaigns instead of normal SMTP to track detailed engagement analytics.</p>
               </div>
             </div>
           </div>

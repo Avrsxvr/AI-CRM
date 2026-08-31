@@ -146,12 +146,26 @@ ${emailBody}
         const recipientEmail = contactFields.email || 'avrsmain@gmail.com';
         const recipientName = contactFields.name || 'Valued Customer';
         
-        const zohoCampaignKey = process.env.ZOHO_CAMPAIGN_KEY;
+        // Check settings for Zoho Campaign Key
+        const zohoCampaignKey = settings.zoho_campaign_key || process.env.ZOHO_CAMPAIGN_KEY;
+        let messageId = `zoho-campaign-${Date.now()}`;
 
-        if (zohoCampaignKey) {
-          // Dispatch using Zoho Campaigns
-          console.log('Dispatching initial email via Zoho Campaigns...');
-          await ZohoCampaignsService.triggerEmail(zohoCampaignKey, recipientEmail, recipientName, emailBody);
+        if (zohoCampaignKey && settings.zoho_client_id) {
+          console.log('Sending email via Zoho Campaigns Transmission API');
+          await ZohoCampaignsService.triggerEmail(
+            {
+              orgId: lead.organization_id,
+              clientId: settings.zoho_client_id,
+              clientSecret: settings.zoho_client_secret || '',
+              refreshToken: settings.zoho_refresh_token || '',
+              accountsUrl: settings.zoho_accounts_url,
+              campaignsApiUrl: settings.zoho_campaigns_api_url
+            },
+            zohoCampaignKey, 
+            recipientEmail, 
+            recipientName, 
+            emailBody
+          );
         } else {
           // Fallback to original custom Node.js Gmail dispatch
           const emailCredentials = {

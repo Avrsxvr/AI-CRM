@@ -47,6 +47,8 @@ export async function saveOrganizationSettings(settings: OrganizationSettings): 
       zoho_refresh_token: settings.zoho_refresh_token,
       zoho_api_url: settings.zoho_api_url,
       zoho_accounts_url: settings.zoho_accounts_url,
+      zoho_campaign_key: settings.zoho_campaign_key,
+      zoho_campaigns_api_url: settings.zoho_campaigns_api_url,
       updated_at: new Date().toISOString(),
     }, { onConflict: 'organization_id' });
 

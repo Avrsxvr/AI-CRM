@@ -155,11 +155,21 @@ export async function GET(
       // Sync to Zoho Campaigns
       const contactEmail = lead.contact_fields?.email;
       if (contactEmail) {
+        const settings = await SettingsService.getSettings(lead.organization_id);
+        
         await ZohoCampaignsService.pushEngagement(
-          contactEmail,
-          'Apexora Adaptive Sequence',
+          {
+            orgId: lead.organization_id,
+            clientId: settings.zoho_client_id || '',
+            clientSecret: settings.zoho_client_secret || '',
+            refreshToken: settings.zoho_refresh_token || '',
+            accountsUrl: settings.zoho_accounts_url,
+            campaignsApiUrl: settings.zoho_campaigns_api_url
+          },
+          lead.contact_fields.email,
+          'AI CRM Automations', 
           'opened',
-          `Touch ${touch} opened`
+          `Opened Followup Email at ${new Date().toISOString()}`
         );
       }
     }

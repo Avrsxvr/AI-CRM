@@ -111,13 +111,26 @@ export async function GET(req: NextRequest) {
         // 4. Send Email
         const recipientEmail = contactFields.email || 'avrsmain@gmail.com';
         const name = contactFields.name || 'Valued Customer';
-        const zohoCampaignKey = process.env.ZOHO_CAMPAIGN_KEY;
+        const zohoCampaignKey = settings.zoho_campaign_key || process.env.ZOHO_CAMPAIGN_KEY;
 
         let messageId = `zoho-campaign-${Date.now()}`;
 
-        if (zohoCampaignKey) {
+        if (zohoCampaignKey && settings.zoho_client_id) {
           console.log(`Dispatching followup ${sequencePosition} via Zoho Campaigns...`);
-          await ZohoCampaignsService.triggerEmail(zohoCampaignKey, recipientEmail, name, body);
+          await ZohoCampaignsService.triggerEmail(
+            {
+              orgId: lead.organization_id,
+              clientId: settings.zoho_client_id,
+              clientSecret: settings.zoho_client_secret || '',
+              refreshToken: settings.zoho_refresh_token || '',
+              accountsUrl: settings.zoho_accounts_url,
+              campaignsApiUrl: settings.zoho_campaigns_api_url
+            },
+            zohoCampaignKey, 
+            recipientEmail, 
+            name, 
+            body
+          );
         } else {
           const emailCredentials = {
             user: settings.email_user || process.env.EMAIL_USER || process.env.EMAIL_FROM_ADDRESS || 'onboarding@resend.dev',

@@ -11,6 +11,8 @@ export interface OrganizationSettings {
   zoho_refresh_token?: string;
   zoho_api_url?: string;
   zoho_accounts_url?: string;
+  zoho_campaign_key?: string;
+  zoho_campaigns_api_url?: string;
   company_profile?: string;
 }
 

@@ -58,16 +58,53 @@ export async function GET(
       }
     }
 
-    // Fetch real metrics from Zoho Campaigns API
-    const zohoAnalytics = await ZohoCampaignsService.fetchCampaignAnalytics(campaign.name);
-
+    // Fetch Update from Zoho Campaigns if configured
+    let zohoAnalytics = null;
+    if (settings.zoho_client_id && settings.zoho_refresh_token) {
+      zohoAnalytics = await ZohoCampaignsService.fetchCampaignAnalytics(
+        {
+          orgId: orgId,
+          clientId: settings.zoho_client_id,
+          clientSecret: settings.zoho_client_secret || '',
+          refreshToken: settings.zoho_refresh_token,
+          accountsUrl: settings.zoho_accounts_url,
+          campaignsApiUrl: settings.zoho_campaigns_api_url
+        },
+        campaign.name
+      );
+    }
+    
+    let updatedTotalSent = campaign.analytics_sent || 0;
     let zohoOpens: any[] = [];
     let zohoClicks: any[] = [];
 
-    if (zohoAnalytics?.campaignKey) {
+    if (zohoAnalytics && zohoAnalytics.campaignKey) {
+      updatedTotalSent = zohoAnalytics.totalSent;
       const [opens, clicks] = await Promise.all([
-        ZohoCampaignsService.fetchCampaignRecipients(zohoAnalytics.campaignKey, 'open'),
-        ZohoCampaignsService.fetchCampaignRecipients(zohoAnalytics.campaignKey, 'click')
+        ZohoCampaignsService.fetchCampaignRecipients(
+          {
+            orgId: orgId,
+            clientId: settings.zoho_client_id,
+            clientSecret: settings.zoho_client_secret || '',
+            refreshToken: settings.zoho_refresh_token,
+            accountsUrl: settings.zoho_accounts_url,
+            campaignsApiUrl: settings.zoho_campaigns_api_url
+          },
+          zohoAnalytics.campaignKey, 
+          'open'
+        ),
+        ZohoCampaignsService.fetchCampaignRecipients(
+          {
+            orgId: orgId,
+            clientId: settings.zoho_client_id,
+            clientSecret: settings.zoho_client_secret || '',
+            refreshToken: settings.zoho_refresh_token,
+            accountsUrl: settings.zoho_accounts_url,
+            campaignsApiUrl: settings.zoho_campaigns_api_url
+          },
+          zohoAnalytics.campaignKey, 
+          'click'
+        )
       ]);
       zohoOpens = opens;
       zohoClicks = clicks;
