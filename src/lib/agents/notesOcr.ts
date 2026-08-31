@@ -15,7 +15,7 @@ export class NotesOcrAgent {
 
     const genAI = new GoogleGenerativeAI(apiKey);
     const model = genAI.getGenerativeModel({
-      model: 'gemini-flash-latest',
+      model: 'gemini-3.6-flash',
       systemInstruction: 'You are an expert sales assistant. Your job is to read handwritten notes taken during a meeting with a lead and extract structured context. Extract the lead\'s pain points, needs, action items, overall sentiment, and any direct quotes if noted.',
       generationConfig: {
         temperature: 0,

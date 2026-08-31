@@ -22,7 +22,7 @@ export class ContextMergeAgent {
 
     const genAI = new GoogleGenerativeAI(apiKey);
     const model = genAI.getGenerativeModel({
-      model: 'gemini-flash-latest',
+      model: 'gemini-3.6-flash',
       systemInstruction: 'You are an expert sales assistant. Your job is to merge two sets of context (e.g., one from a voice recording and one from handwritten notes) into a single, unified, and deduplicated context object.',
       generationConfig: {
         temperature: 0,

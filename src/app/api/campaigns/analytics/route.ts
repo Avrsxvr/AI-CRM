@@ -64,7 +64,7 @@ export async function GET(req: NextRequest) {
 
     const genAI = new GoogleGenerativeAI(apiKey);
     const model = genAI.getGenerativeModel({
-      model: 'gemini-flash-latest',
+      model: 'gemini-3.6-flash',
       systemInstruction: 'You are an elite Marketing Operations AI. Analyze the provided campaign data and generate actionable insights.',
       generationConfig: {
         temperature: 0.2,

@@ -15,7 +15,7 @@ export async function POST(req: NextRequest) {
       
       const ai = new GoogleGenAI({ apiKey: credentials.apiKey });
       const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+        model: 'gemini-3.6-flash',
         contents: 'Say the exact word: "Success"',
       });
       

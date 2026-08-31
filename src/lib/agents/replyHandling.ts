@@ -22,7 +22,7 @@ export class ReplyHandlingAgent {
     const genAI = new GoogleGenerativeAI(apiKey);
 
     const model = genAI.getGenerativeModel({
-      model: 'gemini-1.5-flash',
+      model: 'gemini-3.6-flash',
       systemInstruction: `You are an elite SDR handling an incoming email reply from a prospect.
 Your goal is to:
 1. Analyze the sentiment of the reply (positive, negative, objection, question, neutral).

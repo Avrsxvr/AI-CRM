@@ -49,7 +49,7 @@ export class SequencePersonalizationAgent {
     };
 
     const model = genAI.getGenerativeModel({
-      model: 'gemini-flash-latest',
+      model: 'gemini-3.6-flash',
       systemInstruction: SEQUENCE_PERSONALIZATION_SYSTEM_PROMPT,
       generationConfig: {
         temperature: 0.7,

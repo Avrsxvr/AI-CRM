@@ -36,7 +36,7 @@ export class LeadScoringAgent {
 
   constructor() {
     this.llm = new ChatGoogleGenerativeAI({
-      modelName: 'gemini-1.5-flash',
+      modelName: 'gemini-3.6-flash',
       temperature: 0.2, // Low temperature for consistent scoring
     });
 
