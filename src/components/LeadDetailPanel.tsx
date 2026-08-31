@@ -683,7 +683,7 @@ export default function LeadDetailPanel({ lead, onClose, onRefresh }: LeadDetail
         <TimelinePanel events={getTimelineEvents()} />
 
         {/* 3. AI Extraction Insights */}
-        <InsightsPanel context={context} getSentimentColor={getSentimentColor} />
+        <InsightsPanel context={context} getSentimentColor={getSentimentColor} leadId={lead.id} onRefresh={onRefresh} />
 
         {/* 3. Audio & Transcript */}
         {recording && (recording.audio_url || recording.transcript) && (
