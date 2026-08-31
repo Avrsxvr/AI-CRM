@@ -11,6 +11,7 @@ import { Sparkles, CheckCircle2, ChevronRight, User, ShieldCheck, Play, Save, Al
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { OfflineStorage } from '@/lib/services/offline';
+import { DynamicLoader } from '@/components/DynamicLoader';
 
 interface ExtractedContact {
   name: string | null;
@@ -522,10 +523,10 @@ function CaptureDashboardContent() {
       <div className="absolute bottom-0 right-1/4 w-[500px] h-[500px] bg-emerald-600/5 rounded-full blur-[100px] pointer-events-none"></div>
 
       {/* Premium Header */}
-      <header className="w-full max-w-6xl mx-auto flex flex-col md:flex-row md:items-center justify-between py-4 z-10 gap-6">
+      <header className="w-full max-w-6xl mx-auto flex flex-col md:flex-row md:items-center justify-between py-4 z-10 gap-4 md:gap-6">
         <Link 
           href={campaignId ? `/campaigns/${campaignId}` : "/leads"} 
-          className="group flex items-center gap-2 text-sm text-slate-500 hover:text-blue-600 transition-colors font-semibold"
+          className="group flex items-center gap-2 text-sm text-slate-500 hover:text-blue-600 transition-colors font-semibold self-start md:self-auto"
         >
           <div className="w-8 h-8 rounded-full bg-white border border-slate-200 flex items-center justify-center shadow-sm group-hover:border-blue-200 group-hover:shadow-md transition-all">
             <ChevronRight className="w-4 h-4 rotate-180" />
@@ -533,35 +534,36 @@ function CaptureDashboardContent() {
           {campaignId ? 'Back to Campaign' : 'Back to Dashboard'}
         </Link>
         
-          <div className="flex items-center gap-2 bg-white border border-slate-200 p-1.5 rounded-2xl shadow-sm">
-            {[
-              { id: 'card_choice', label: '1. Card', icon: <span className="mr-1">💳</span>, match: ['card_choice', 'card', 'bulk'] },
-              { id: 'notes', label: '2. Notes', icon: <span className="mr-1">📝</span>, match: ['notes'] },
-              { id: 'voice', label: '3. Voice', icon: <span className="mr-1">🎙️</span>, match: ['voice'] },
-              { id: 'review', label: '4. Review', icon: <span className="mr-1">✨</span>, match: ['review'] }
-            ].map((step) => {
-              const isActive = step.match.includes(mode);
-              return (
-                <button
-                  key={step.id}
-                  onClick={() => setMode(step.id as any)}
-                  className={`flex items-center px-4 py-2 text-xs font-bold rounded-xl transition-all duration-300 ${
-                    isActive 
-                      ? 'bg-blue-600 text-white shadow-md transform scale-[1.02]' 
-                      : 'text-slate-500 hover:text-slate-900 hover:bg-slate-50'
-                  }`}
-                >
-                  {step.icon}
-                  <span className="hidden sm:inline">{step.label}</span>
-                </button>
-              );
-            })}
-          </div>
+        <div className="flex items-center justify-between w-full md:w-auto gap-1 bg-white/80 backdrop-blur-md border border-slate-200 p-1.5 rounded-2xl shadow-sm">
+          {[
+            { id: 'card_choice', label: '1. Card', shortLabel: 'Card', icon: '💳', match: ['card_choice', 'card', 'bulk'] },
+            { id: 'notes', label: '2. Notes', shortLabel: 'Notes', icon: '📝', match: ['notes'] },
+            { id: 'voice', label: '3. Voice', shortLabel: 'Voice', icon: '🎙️', match: ['voice'] },
+            { id: 'review', label: '4. Review', shortLabel: 'Review', icon: '✨', match: ['review'] }
+          ].map((step) => {
+            const isActive = step.match.includes(mode);
+            return (
+              <button
+                key={step.id}
+                onClick={() => setMode(step.id as any)}
+                className={`flex flex-col sm:flex-row items-center justify-center flex-1 sm:flex-none px-2 sm:px-4 py-2 sm:py-2 rounded-xl transition-all duration-300 gap-1 sm:gap-2 ${
+                  isActive 
+                    ? 'bg-blue-600 text-white shadow-md transform sm:scale-[1.02]' 
+                    : 'text-slate-500 hover:text-slate-900 hover:bg-slate-50'
+                }`}
+              >
+                <span className="text-lg sm:text-base leading-none">{step.icon}</span>
+                <span className="text-[10px] sm:text-xs font-bold leading-none hidden sm:inline">{step.label}</span>
+                <span className="text-[10px] sm:text-xs font-bold leading-none sm:hidden">{step.shortLabel}</span>
+              </button>
+            );
+          })}
+        </div>
           
-          <div className="hidden md:flex items-center gap-2 bg-white border border-slate-200 px-4 py-2 rounded-xl shadow-sm">
-            <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></div>
-            <span className="text-[10px] font-bold tracking-widest text-slate-600 uppercase">Live Workspace</span>
-          </div>
+        <div className="hidden md:flex items-center gap-2 bg-white border border-slate-200 px-4 py-2 rounded-xl shadow-sm">
+          <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></div>
+          <span className="text-[10px] font-bold tracking-widest text-slate-600 uppercase">Live Workspace</span>
+        </div>
       </header>
 
       {isComplete ? (
@@ -672,8 +674,11 @@ function CaptureDashboardContent() {
                   <div className="space-y-6">
                     {isBulkAutoSaving ? (
                       <div className="bg-white border border-slate-200 shadow-sm rounded-3xl p-8 text-center space-y-4">
-                        <Loader2 className="w-12 h-12 text-blue-600 animate-spin mx-auto mb-4" />
-                        <h3 className="text-xl font-bold text-slate-900">Auto-Saving Leads</h3>
+                        <DynamicLoader 
+                          messages={["Extracting card data...", "Saving to CRM...", "Almost done..."]} 
+                          className="py-4"
+                        />
+                        <h3 className="text-xl font-bold text-slate-900 mt-4">Auto-Saving Leads</h3>
                         <p className="text-slate-500">Processing {bulkProgress.processed} of {bulkProgress.total} cards...</p>
                         <div className="w-full bg-slate-100 rounded-full h-2.5 mt-4 overflow-hidden">
                           <div className="bg-blue-600 h-2.5 rounded-full transition-all duration-500" style={{ width: `${(bulkProgress.processed / bulkProgress.total) * 100}%` }}></div>
@@ -716,10 +721,10 @@ function CaptureDashboardContent() {
                           
                           {cardProcessing ? (
                             <div className="py-24 text-center">
-                              <Loader2 className="w-12 h-12 text-blue-600 animate-spin mx-auto mb-4" />
-                              <p className="text-slate-500 font-medium animate-pulse">
-                                {queueIndex === -1 ? `Extracting data for ${verificationQueue.length} cards...` : 'Saving...'}
-                              </p>
+                              <DynamicLoader 
+                                messages={queueIndex === -1 ? ["Extracting details from cards...", "Running OCR..."] : ["Saving details...", "Securing data..."]} 
+                                className="py-4"
+                              />
                             </div>
                           ) : extractedFields ? (
                             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
@@ -896,8 +901,8 @@ function CaptureDashboardContent() {
 export default function CaptureDashboard() {
   return (
     <React.Suspense fallback={
-      <div className="min-h-screen bg-white flex justify-center items-center">
-        <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+      <div className="min-h-screen bg-white flex flex-col justify-center items-center">
+        <DynamicLoader messages={[]} />
       </div>
     }>
       <CaptureDashboardContent />

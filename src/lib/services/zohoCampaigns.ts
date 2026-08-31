@@ -128,7 +128,14 @@ export class ZohoCampaignsService {
         return null;
       }
 
-      const searchData = await searchResponse.json();
+      const searchRaw = await searchResponse.text();
+      let searchData;
+      try {
+        searchData = JSON.parse(searchRaw);
+      } catch (e) {
+        console.warn('Zoho Campaigns returned non-JSON (likely XML error):', searchRaw);
+        return null;
+      }
       
       // The API returns recent campaigns. Find the one matching our name.
       const campaignsList = searchData.recent_campaigns || [];
@@ -161,7 +168,14 @@ export class ZohoCampaignsService {
         return null;
       }
 
-      const summaryData = await summaryResponse.json();
+      const summaryRaw = await summaryResponse.text();
+      let summaryData;
+      try {
+        summaryData = JSON.parse(summaryRaw);
+      } catch (e) {
+        console.warn('Zoho Campaigns returned non-JSON for summary:', summaryRaw);
+        return null;
+      }
       const details = summaryData.campaign_details || {};
 
       const totalSent = parseInt(details.emails_sent, 10) || 0;
@@ -203,7 +217,14 @@ export class ZohoCampaignsService {
         return [];
       }
 
-      const data = await response.json();
+      const rawData = await response.text();
+      let data;
+      try {
+        data = JSON.parse(rawData);
+      } catch (e) {
+        console.warn(`Zoho Campaigns returned non-JSON for ${type} recipients:`, rawData);
+        return [];
+      }
       
       // Zoho typically returns the list of contacts under something like `campaign_recipients` or `recent_activities`
       // We will parse the response robustly

@@ -285,7 +285,7 @@ export default function CampaignsPage() {
                       </div>
                       <div className="flex items-center justify-between bg-slate-800/10 rounded-lg px-3 py-2 border border-blue-500/10">
                         <span className="flex items-center gap-1.5 text-slate-600">🔥 Hot</span>
-                        <span className="font-bold text-slate-900">{campaign.hot_leads || 0}</span>
+                        <span className="font-bold text-slate-900">{campaign.hot_count || 0}</span>
                       </div>
                       <div className="flex items-center justify-between bg-white/40 rounded-lg px-3 py-2 border border-slate-200">
                         <span className="flex items-center gap-1.5 text-slate-500">Sent</span>
@@ -293,7 +293,7 @@ export default function CampaignsPage() {
                       </div>
                       <div className="flex items-center justify-between bg-teal-500/10 rounded-lg px-3 py-2 border border-teal-500/10">
                         <span className="flex items-center gap-1.5 text-teal-400">Opened</span>
-                        <span className="font-bold text-slate-900">{campaign.emails_opened || 0}</span>
+                        <span className="font-bold text-slate-900">{campaign.opened_count || 0}</span>
                       </div>
                     </div>
                   </div>

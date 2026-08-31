@@ -133,6 +133,20 @@ export default function SettingsPage() {
                   />
                 </div>
               </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700">Company Profile / What We Offer (For AI Chatbot)</label>
+                <div className="mt-1">
+                  <textarea
+                    name="company_profile"
+                    value={settings.company_profile || ''}
+                    onChange={(e) => setSettings((prev) => ({ ...prev, company_profile: e.target.value }))}
+                    rows={4}
+                    className="block w-full rounded-md border border-slate-300 bg-white px-4 py-2 text-slate-900 focus:border-blue-500 focus:ring-blue-500 sm:text-sm shadow-sm"
+                    placeholder="Describe what your company does and what you offer. The AI will use this to qualify leads and answer questions..."
+                  />
+                </div>
+                <p className="mt-2 text-xs text-slate-500">This helps the AI Assistant understand your business context.</p>
+              </div>
             </div>
           </div>
 

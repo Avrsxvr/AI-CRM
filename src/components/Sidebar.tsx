@@ -15,7 +15,8 @@ import {
   LogOut,
   BarChart2,
   Mail,
-  User
+  User,
+  Bot
 } from 'lucide-react';
 import { createClient } from '@/utils/supabase/client';
 
@@ -24,6 +25,7 @@ const NAV_ITEMS = [
   { href: '/analytics', icon: BarChart2, label: 'Analytics', color: 'text-purple-600', hoverBg: 'hover:bg-purple-50', activeBg: 'bg-purple-50 border-purple-200' },
   { href: '/campaigns', icon: Megaphone, label: 'Campaigns', color: 'text-teal-600', hoverBg: 'hover:bg-teal-50', activeBg: 'bg-teal-50 border-teal-200' },
   { href: '/follow-ups', icon: Mail, label: 'Follow-ups', color: 'text-indigo-600', hoverBg: 'hover:bg-indigo-50', activeBg: 'bg-indigo-50 border-indigo-200' },
+  { href: '/chat', icon: Bot, label: 'AI Assistant', color: 'text-emerald-600', hoverBg: 'hover:bg-emerald-50', activeBg: 'bg-emerald-50 border-emerald-200' },
   { href: '/capture', icon: Zap, label: 'Capture', color: 'text-amber-600', hoverBg: 'hover:bg-amber-50', activeBg: 'bg-amber-50 border-amber-200' },
   { href: '/team', icon: Users, label: 'Team', color: 'text-cyan-600', hoverBg: 'hover:bg-cyan-50', activeBg: 'bg-cyan-50 border-cyan-200' },
   { href: '/notifications', icon: Bell, label: 'Inbox', color: 'text-rose-600', hoverBg: 'hover:bg-rose-50', activeBg: 'bg-rose-50 border-rose-200' },

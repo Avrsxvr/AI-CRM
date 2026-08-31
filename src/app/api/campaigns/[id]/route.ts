@@ -33,14 +33,15 @@ export async function GET(
           sequence_position,
           subject,
           leads (
-            contact_fields
+            contact_fields,
+            context_summary
           )
         `)
         .in('lead_id', leadIds);
 
       if (followups) {
-        analytics.sent = followups.filter(f => f.status === 'sent' || f.status === 'opened').length;
-        const openedFollowups = followups.filter(f => f.status === 'opened' || f.opened === true);
+        analytics.sent = followups.filter(f => ['sent', 'opened'].includes(f.status)).length;
+        const openedFollowups = followups.filter(f => f.opened_at != null || f.status === 'opened' || (f.leads as any)?.contact_fields?.open_count > 0 || (f.leads as any)?.context_summary?.open_count > 0);
         analytics.opened = openedFollowups.length;
 
         analytics.openDetails = openedFollowups.map(f => {

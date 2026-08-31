@@ -168,7 +168,7 @@ export default function LeadList({
                           {contact.email && (
                             <span className="text-[10px] text-slate-400">{contact.email}</span>
                           )}
-                          {lead.followups?.length > 0 && (
+                          {(lead.followups?.length > 0 || (lead.context_summary?.open_count || 0) > 0) && (
                             <>
                               {contact.email && <span className="text-[10px] text-zinc-700 select-none">•</span>}
                               <span className="text-[9px] font-semibold text-slate-500 bg-white/60 border border-slate-200 px-1.5 py-0.5 rounded flex items-center gap-1 select-none">
@@ -285,7 +285,7 @@ export default function LeadList({
                     )}
                     <div className="flex items-center gap-2 mt-1">
                       <LeadScoreBadge score={score} />
-                      {lead.followups?.length > 0 && (
+                      {(lead.followups?.length > 0 || (lead.context_summary?.open_count || 0) > 0) && (
                         <span className="text-[9px] font-semibold text-slate-500 bg-white/60 border border-slate-200 px-1.5 py-0.5 rounded flex items-center gap-1 select-none">
                           <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
                           👁️ {lead.context_summary?.open_count || 0} views

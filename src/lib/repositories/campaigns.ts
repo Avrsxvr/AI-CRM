@@ -38,7 +38,7 @@ export class CampaignsRepository {
       .select(`
         *,
         campaign_leads(
-          lead:leads(context_summary)
+          lead:leads(context_summary, total_emails_sent, followups(status))
         )
       `)
       .eq('organization_id', organizationId)
@@ -47,12 +47,25 @@ export class CampaignsRepository {
 
     if (error) throw new Error(`Database error fetching campaigns: ${error.message}`);
 
-    // Map the Supabase count object to a flat number
-    return data.map((campaign: any) => ({
-      ...campaign,
-      lead_count: campaign.campaign_leads[0]?.count || 0,
-      campaign_leads: undefined // clean up response
-    }));
+    // Map the Supabase count object to a flat number and calculate stats
+    return data.map((campaign: any) => {
+      const leads = campaign.campaign_leads || [];
+      const hotCount = leads.filter((cl: any) => cl.lead?.context_summary?.is_hot === true).length;
+      const openedCount = leads.filter((cl: any) => (cl.lead?.context_summary?.open_count || 0) > 0).length;
+      const sentCount = leads.reduce((sum: number, cl: any) => {
+        const leadSent = cl.lead?.followups ? cl.lead.followups.filter((f: any) => ['sent', 'opened'].includes(f.status)).length : 0;
+        return sum + Math.max(leadSent, (cl.lead?.total_emails_sent || 0));
+      }, 0);
+      
+      return {
+        ...campaign,
+        lead_count: leads.length,
+        hot_count: hotCount,
+        opened_count: openedCount,
+        emails_sent: sentCount,
+        campaign_leads: undefined // clean up response
+      };
+    });
   }
 
   /**

@@ -22,7 +22,7 @@ export async function GET(req: NextRequest) {
     // Fetch leads for sentiment and volume
     const { data: leads, error: leadsError } = await supabase
       .from('leads')
-      .select('id, created_at, context_summary, status')
+      .select('id, created_at, context_summary, status, total_emails_sent, total_emails_opened')
       .eq('organization_id', orgId);
 
     if (leadsError) throw leadsError;
@@ -35,7 +35,7 @@ export async function GET(req: NextRequest) {
     if (leadIds.length > 0) {
       const { data: fData } = await supabase
         .from('followups')
-        .select('status, opened')
+        .select('status, opened_at, lead_id')
         .in('lead_id', leadIds);
       if (fData) followups = fData;
     }
@@ -76,7 +76,7 @@ export async function GET(req: NextRequest) {
         neutralSentiment++;
       }
 
-      if (lead.status === 'hot') totalHotLeads++;
+      if (lead.context_summary?.is_hot === true) totalHotLeads++;
     });
 
     const leadsByDate = Object.entries(dateCounts)
@@ -87,9 +87,21 @@ export async function GET(req: NextRequest) {
       }));
 
     // 2. Email Stats
-    const emailsSent = followups.filter((f: any) => f.status === 'sent').length;
-    const emailsOpened = followups.filter((f: any) => f.opened === true).length;
-    const openRate = emailsSent > 0 ? Math.round((emailsOpened / emailsSent) * 100) : 0;
+    // Sent: count followup rows with sent or opened status (most reliable source)
+    const emailsSent = followups.filter((f: any) => ['sent', 'opened'].includes(f.status)).length;
+
+    // Opened: sum total_emails_opened from leads — this is ALWAYS updated by the tracking pixel
+    // regardless of whether the followup row gets updated (followups.opened_at is unreliable).
+    // Also count unique leads that have any open_count > 0 as a cross-check.
+    const emailsOpenedFromLeads = leads.reduce((sum: number, l: any) => sum + (l.total_emails_opened || 0), 0);
+    const emailsOpenedFromFollowups = followups.filter((f: any) => f.opened_at != null || f.status === 'opened').length;
+    // Use leads as primary source since total_emails_sent column is unreliable (sometimes 0)
+    // Unique leads that opened at least one email
+    const uniqueLeadsOpened = leads.filter((l: any) => (l.total_emails_opened || 0) > 0).length;
+    const emailsOpened = Math.max(emailsOpenedFromLeads, emailsOpenedFromFollowups);
+    // Open rate = unique leads that opened / total leads that received at least one email
+    const leadsWithSentEmails = leads.filter((l: any) => (l.total_emails_sent || 0) > 0 || followups.some((f: any) => f.lead_id === l.id && ['sent', 'opened'].includes(f.status))).length;
+    const openRate = emailsSent > 0 ? Math.round((uniqueLeadsOpened / Math.max(leadsWithSentEmails, 1)) * 100) : 0;
 
     return NextResponse.json({
       data: {

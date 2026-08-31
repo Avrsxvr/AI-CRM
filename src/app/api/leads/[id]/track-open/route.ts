@@ -67,7 +67,6 @@ export async function GET(
         await supabaseAdmin
           .from('followups')
           .update({
-            status: 'opened',
             opened_at: new Date().toISOString()
           })
           .eq('lead_id', id)
