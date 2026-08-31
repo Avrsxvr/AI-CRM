@@ -51,12 +51,12 @@ export async function POST(req: NextRequest) {
           .select('contact_fields, context_summary')
           .eq('organization_id', orgId)
           .order('created_at', { ascending: false })
-          .limit(20),
+          .limit(1000), // Expanded to give AI full database memory
         supabase
           .from('campaigns')
           .select('name, status')
           .eq('organization_id', orgId)
-          .limit(10),
+          .limit(1000), // Expanded to give AI full database memory
         supabase
           .from('leads')
           .select('*', { count: 'exact', head: true })
@@ -98,10 +98,10 @@ ${companyProfile}
 - Total Leads in Database: ${totalLeadsCount}
 - Total Campaigns in Database: ${totalCampaignsCount}
 
-### Recent Active Campaigns (Up to 10):
+### Active Campaigns:
 ${campaignsContext}
 
-### Recent Leads (Up to 20 recent):
+### All CRM Leads:
 ${leadsContext}
 
 ## Your Behavior Rules:
