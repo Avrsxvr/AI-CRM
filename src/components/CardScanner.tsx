@@ -40,8 +40,8 @@ export default function CardScanner({ onScanComplete, isProcessing: externalProc
       img.onload = () => {
         // Compress image using canvas
         const canvas = document.createElement('canvas');
-        const MAX_WIDTH = 1200;
-        const MAX_HEIGHT = 1200;
+        const MAX_WIDTH = 800;
+        const MAX_HEIGHT = 800;
         let width = img.width;
         let height = img.height;
 
@@ -62,8 +62,8 @@ export default function CardScanner({ onScanComplete, isProcessing: externalProc
         const ctx = canvas.getContext('2d');
         if (ctx) {
           ctx.drawImage(img, 0, 0, width, height);
-          // Compress to JPEG with 0.8 quality to avoid API payload crash
-          const compressedBase64 = canvas.toDataURL('image/jpeg', 0.8);
+          // Compress to JPEG with 0.6 quality to heavily speed up network upload payload
+          const compressedBase64 = canvas.toDataURL('image/jpeg', 0.6);
           setImage(compressedBase64);
         } else {
           // Fallback if canvas fails
