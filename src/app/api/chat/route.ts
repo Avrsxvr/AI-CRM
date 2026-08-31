@@ -41,9 +41,11 @@ export async function POST(req: NextRequest) {
 
     // ── 4. Fetch CRM context (non-blocking, graceful on error) ──────────
     let recentLeads: any[] = [];
+    let totalLeadsCount = 0;
     let activeCampaigns: any[] = [];
+    let totalCampaignsCount = 0;
     try {
-      const [leadsRes, campaignsRes] = await Promise.all([
+      const [leadsRes, campaignsRes, leadsCountRes, campaignsCountRes] = await Promise.all([
         supabase
           .from('leads')
           .select('contact_fields, context_summary')
@@ -55,9 +57,19 @@ export async function POST(req: NextRequest) {
           .select('name, status')
           .eq('organization_id', orgId)
           .limit(10),
+        supabase
+          .from('leads')
+          .select('*', { count: 'exact', head: true })
+          .eq('organization_id', orgId),
+        supabase
+          .from('campaigns')
+          .select('*', { count: 'exact', head: true })
+          .eq('organization_id', orgId),
       ]);
       recentLeads = leadsRes.data || [];
       activeCampaigns = campaignsRes.data || [];
+      totalLeadsCount = leadsCountRes.count || recentLeads.length;
+      totalCampaignsCount = campaignsCountRes.count || activeCampaigns.length;
     } catch (_) {
       // CRM context is bonus — never crash the chat because of it
     }
@@ -82,10 +94,14 @@ Your role is to help the user manage leads, analyze their pipeline, research com
 ## What This Company Offers:
 ${companyProfile}
 
-## Live CRM Data:
-Active Campaigns: ${campaignsContext}
+## Live CRM Data Overview:
+- Total Leads in Database: ${totalLeadsCount}
+- Total Campaigns in Database: ${totalCampaignsCount}
 
-Recent Leads:
+### Recent Active Campaigns (Up to 10):
+${campaignsContext}
+
+### Recent Leads (Up to 20 recent):
 ${leadsContext}
 
 ## Your Behavior Rules:
