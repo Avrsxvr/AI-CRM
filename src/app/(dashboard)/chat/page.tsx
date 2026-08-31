@@ -67,13 +67,21 @@ export default function ChatPage() {
         const { done, value } = await reader.read();
         if (done) break;
 
-        aiResponse += decoder.decode(value, { stream: true });
+        const chunkText = decoder.decode(value, { stream: true });
         
-        setMessages((prev) => {
-          const updated = [...prev];
-          updated[updated.length - 1] = { role: 'model', content: aiResponse };
-          return updated;
-        });
+        // Artificial micro-chunking to make the stream look smooth and fast
+        // instead of flashing massive blocks of text at once.
+        const words = chunkText.split(/(\s+)/);
+        for (const word of words) {
+          aiResponse += word;
+          setMessages((prev) => {
+            const updated = [...prev];
+            updated[updated.length - 1] = { role: 'model', content: aiResponse };
+            return updated;
+          });
+          // Micro delay to simulate smooth typing stream
+          await new Promise(r => setTimeout(r, 10));
+        }
       }
 
       // If we got an empty response, show a fallback

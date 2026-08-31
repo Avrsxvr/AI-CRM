@@ -119,7 +119,7 @@ ${leadsContext}
       model: 'gemini-3.6-flash',
       config: {
         systemInstruction,
-        // tools: [{ googleSearch: {} }], // Disabled for faster response times
+        tools: [{ googleSearch: {} }],
       },
       history,
     });
